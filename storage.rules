@@ -1,0 +1,36 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 1. مسار المستخدمين
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    // 2. مسار المطاعم
+    match /restaurants/{restaurantId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    // 3. مسار العروض
+    match /offer-images/{restaurantId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    // 4. مسار قائمة الطعام القديم
+    match /menu-images/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 5. مسار شعارات التطبيقات (هذه هي الإضافة)
+    match /application_logos/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 6. منع أي شي آخر (يجب أن تكون هذه القاعدة في النهاية دائماً)
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

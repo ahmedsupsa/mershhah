@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "mershhah-manager": {
+              "command": "npm",
+                    "args": ["run", "mcp"],
+                          "env": {
+                                  "NODE_ENV": "development",
+                                          "PROJECT_ROOT": "."
+                                                }
+                                                    }
+                                                      }
+                                                      }
+}
