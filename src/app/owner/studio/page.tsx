@@ -132,6 +132,16 @@ export default function StudioPage() {
             toast({ title: "🚀 جاري الإنشاء...", description: "يقوم الذكاء الاصطناعي بعمله. قد يستغرق الأمر دقيقة." });
 
             try {
+                // إذا كان على الباقة المجانية ولم يستخدم تجربة الذكاء الاصطناعي من قبل، نسجل انتهاء التجربة
+                if (user.entitlements.planId === 'free' && !user.ai_trial_used) {
+                    try {
+                        const profileRef = doc(db, 'profiles', user.uid);
+                        await updateDoc(profileRef, { ai_trial_used: true });
+                    } catch {
+                        // نتجاهل خطأ تسجيل التجربة، ولا نمنع التنفيذ
+                    }
+                }
+
                 let result: { imageDataUri: string } | null = null;
                 let finalName = '';
                 let finalId = '';
@@ -200,8 +210,52 @@ export default function StudioPage() {
                 title="استوديو مرشح"
                 description="مساحتك الإبداعية لإنشاء صور احترافية لمنتجاتك وعروضك."
             />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                <Card className="lg:col-span-1 sticky top-20">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                {/* معاينة الصورة النهائية */}
+                <div className="space-y-4 order-1 lg:order-none">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg font-bold">معاينة التصميم</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="aspect-[4/3] border-2 border-dashed rounded-xl flex items-center justify-center bg-muted/30 p-2 relative overflow-hidden">
+                                {isProcessing && (
+                                    <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-2">
+                                        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                                        <p className="text-muted-foreground font-medium">يقوم الذكاء الاصطناعي بالعمل...</p>
+                                    </div>
+                                )}
+                                {generatedImageUrl && (
+                                    <Image
+                                        src={generatedImageUrl}
+                                        alt="Generated Image"
+                                        fill
+                                        className="object-contain"
+                                        sizes="(max-width: 1024px) 100vw, 800px"
+                                    />
+                                )}
+                                {mode === 'enhance' && userImagePreview && !generatedImageUrl && (
+                                    <Image
+                                        src={userImagePreview}
+                                        alt="Uploaded Image"
+                                        fill
+                                        className="object-contain"
+                                        sizes="(max-width: 1024px) 100vw, 800px"
+                                    />
+                                )}
+                                {!generatedImageUrl && !(mode === 'enhance' && userImagePreview) && (
+                                    <div className="text-center text-muted-foreground">
+                                        <Bot className="h-16 w-16 mx-auto mb-2" />
+                                        <p className="font-semibold">ستظهر الصورة النهائية هنا</p>
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* إعدادات التوليد */}
+                <Card className="lg:sticky lg:top-20 order-2 lg:order-none">
                     <CardContent className="p-6 space-y-6">
                         <div className="space-y-2">
                              <Label>1. اختر الوضع</Label>
@@ -264,20 +318,6 @@ export default function StudioPage() {
                         </div>
                     </CardContent>
                 </Card>
-
-                <div className="lg:col-span-2 space-y-4">
-                     <div className="aspect-[4/3] border-2 border-dashed rounded-xl flex items-center justify-center bg-muted/30 p-2 relative overflow-hidden">
-                        {isProcessing && <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-2"><Loader2 className="h-10 w-10 animate-spin text-primary" /><p className="text-muted-foreground font-medium">يقوم الذكاء الاصطناعي بالعمل...</p></div>}
-                        {generatedImageUrl && <Image src={generatedImageUrl} alt="Generated Image" fill className="object-contain" sizes="(max-width: 1024px) 100vw, 800px" />}
-                        {mode === 'enhance' && userImagePreview && !generatedImageUrl && <Image src={userImagePreview} alt="Uploaded Image" fill className="object-contain" sizes="(max-width: 1024px) 100vw, 800px"/>}
-                        {!generatedImageUrl && !(mode === 'enhance' && userImagePreview) && (
-                             <div className="text-center text-muted-foreground">
-                                <Bot className="h-16 w-16 mx-auto mb-2" />
-                                <p className="font-semibold">ستظهر الصورة النهائية هنا</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
             </div>
             <Separator className="my-8" />
              <div className="space-y-4">

@@ -13,6 +13,7 @@ import { useUser } from "@/hooks/useUser";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { SessionTimeout } from "@/components/shared/SessionTimeout";
+import { useLanguage } from "@/components/shared/LanguageContext";
 
 export default function AdminLayout({
   children,
@@ -21,6 +22,8 @@ export default function AdminLayout({
 }) {
   const { user, isLoading } = useUser();
   const router = useRouter();
+  const { locale, dir } = useLanguage();
+  const isRTL = locale === 'ar';
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -37,10 +40,10 @@ export default function AdminLayout({
   }
 
   return (
-      <>
+      <div dir={dir}>
         <SessionTimeout />
         <SidebarProvider>
-          <Sidebar side="right">
+          <Sidebar side={isRTL ? "right" : "left"}>
             <AdminSidebar />
           </Sidebar>
           <div className="min-h-screen w-full bg-muted/40">
@@ -54,6 +57,6 @@ export default function AdminLayout({
             </SidebarInset>
           </div>
         </SidebarProvider>
-      </>
+      </div>
   );
 }

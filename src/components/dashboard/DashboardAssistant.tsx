@@ -103,6 +103,16 @@ export function DashboardAssistant() {
 
     startThinking(async () => {
       try {
+        // في الباقة المجانية نسمح بمحاولة واحدة لتجربة المساعد ثم نغلقها
+        if (user?.entitlements.planId === 'free' && !user.ai_trial_used) {
+          try {
+            const profileRef = doc(db, 'profiles', user.uid);
+            await updateDoc(profileRef, { ai_trial_used: true });
+          } catch {
+            // نتجاهل الخطأ حتى لا نمنع المستخدم من التجربة
+          }
+        }
+
         // The menuItems state is now always up-to-date thanks to onSnapshot.
         // We still need to serialize it to remove any complex objects before sending.
         const plainMenuItems = JSON.parse(JSON.stringify(menuItems));

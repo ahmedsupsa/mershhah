@@ -5,7 +5,7 @@ import { useParams, useRouter, notFound } from 'next/navigation';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { SendHorizonal, Bot, User, ChevronRight, Utensils, MapPin } from 'lucide-react';
+import { SendHorizonal, Bot, User, ChevronRight, Utensils } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, limit, doc, addDoc, serverTimestamp, setDoc, updateDoc, getDoc } from 'firebase/firestore';
@@ -129,6 +129,20 @@ export default function AiAssistantPage() {
 
   if (loading || !restaurant) return <div className="flex items-center justify-center h-screen">جاري التحميل...</div>;
   
+  // المساعد الذكي للعملاء متاح فقط في الباقات المدفوعة
+  if (!restaurant.is_paid_plan) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50" dir="rtl">
+        <div className="max-w-md mx-auto bg-white rounded-3xl shadow-lg p-8 text-center space-y-4 border border-gray-100">
+          <h1 className="text-xl font-black">المساعد الذكي متاح في الباقات المدفوعة</h1>
+          <p className="text-sm text-muted-foreground">
+            لتفعيل المساعد الذكي لعملائك، قم بترقية باقتك من لوحة التحكم في مرشح.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const primaryColor = restaurant.primaryColor || '#e11d48';
 
   return (
@@ -162,12 +176,6 @@ export default function AiAssistantPage() {
             <Button variant="outline" size="sm" className="rounded-full shrink-0 gap-2 text-xs">
                 <Utensils className="h-3.5 w-3.5" style={{ color: primaryColor }} />
                 قائمة الطعام
-            </Button>
-          </Link>
-          <Link href={`/branches/${username}`}>
-            <Button variant="outline" size="sm" className="rounded-full shrink-0 gap-2 text-xs">
-                <MapPin className="h-3.5 w-3.5" style={{ color: primaryColor }} />
-                فروعنا
             </Button>
           </Link>
       </div>

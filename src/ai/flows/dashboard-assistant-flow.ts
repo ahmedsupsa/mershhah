@@ -7,6 +7,7 @@ const AssistantInputSchema = z.object({
   question: z.string().describe("The user's question about the Mershhah dashboard."),
   currentPage: z.string().describe("The current page the user is on, to provide context."),
   menuItems: z.array(z.any()).optional().describe("An optional array of the user's menu items to provide data context for analysis."),
+  locale: z.enum(['ar', 'en']).default('ar').describe('The language locale for the response.'),
 });
 
 export type AssistantInput = z.infer<typeof AssistantInputSchema>;
@@ -51,8 +52,8 @@ export async function dashboardAssistant(input: AssistantInput): Promise<Assista
   return assistantFlow(input);
 }
 
-const prompt = ai.definePrompt({
-    name: 'dashboardAssistantPrompt',
+const arabicPrompt = ai.definePrompt({
+    name: 'dashboardAssistantPromptAr',
     tools: [generateImageTool],
     input: { schema: AssistantInputSchema },
     output: { schema: AssistantOutputSchema },
@@ -76,6 +77,31 @@ const prompt = ai.definePrompt({
 `,
 });
 
+const englishPrompt = ai.definePrompt({
+    name: 'dashboardAssistantPromptEn',
+    tools: [generateImageTool],
+    input: { schema: AssistantInputSchema },
+    output: { schema: AssistantOutputSchema },
+    prompt: `You are "Companion", an expert AI assistant who understands business owners. Your job is to be a helpful friend who guides and answers any question in a simple, friendly, and direct manner.
+
+**User Context:**
+*   **Current Page:** {{{currentPage}}}
+*   **User Question:** "{{{question}}}"
+
+---
+
+**Project Data (if available):**
+{{#if menuItems}}
+*   **Menu Data:**
+\`\`\`json
+{{{json menuItems}}}
+\`\`\`
+{{/if}}
+
+Now, based on all this, answer the user's question, look for any issues in the data, and suggest actionable solutions.
+`,
+});
+
 
 const assistantFlow = ai.defineFlow(
   {
@@ -85,7 +111,8 @@ const assistantFlow = ai.defineFlow(
   },
   async (input) => {
     const plainMenuItems = JSON.parse(JSON.stringify(input.menuItems));
-    const { output } = await prompt({ ...input, menuItems: plainMenuItems }, { model: 'googleai/gemini-3.1-pro-preview' });
+    const selectedPrompt = input.locale === 'en' ? englishPrompt : arabicPrompt;
+    const { output } = await selectedPrompt({ ...input, menuItems: plainMenuItems }, { model: 'googleai/gemini-3.1-pro-preview' });
     if (!output) {
       throw new Error("The AI model returned an empty response.");
     }

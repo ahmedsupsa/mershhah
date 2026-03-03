@@ -22,39 +22,42 @@ import { useUser } from "@/hooks/useUser";
 import { db } from "@/lib/firebase";
 import { collection, collectionGroup, getDocs, query, where, Timestamp } from "firebase/firestore";
 import { format, eachDayOfInterval, startOfWeek, endOfWeek } from 'date-fns';
-import { arSA } from 'date-fns/locale';
+import { arSA, enUS } from 'date-fns/locale';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-
-const chartConfig = {
-  visitors: {
-    label: "الزوار",
-    color: "hsl(var(--primary))",
-  },
-} satisfies ChartConfig;
+import { useLanguage } from "@/components/shared/LanguageContext";
 
 type AnalyticsData = {
     totalVisitors: number;
     totalQuestions: number;
-    peakHours: string;
-    customerSentiment: string;
-    weeklyVisitors: { day: string; visitors: number }[];
+    peakStartHour: number | null;
+    averageRating: number | null;
+    weeklyVisitors: { date: Date; visitors: number }[];
     activityHeatMap: { hour: number; activity: number }[];
 }
 
-const getSentimentFromRating = (rating: number): string => {
-    if (rating >= 4.5) return "ممتاز";
-    if (rating >= 4.0) return "جيد جداً";
-    if (rating >= 3.0) return "جيد";
-    if (rating >= 2.0) return "مقبول";
-    if (rating > 0) return "سيء";
-    return "لا يوجد";
+const getSentimentFromRating = (rating: number, isRTL: boolean): string => {
+    if (rating >= 4.5) return isRTL ? "ممتاز" : "Excellent";
+    if (rating >= 4.0) return isRTL ? "جيد جداً" : "Very Good";
+    if (rating >= 3.0) return isRTL ? "جيد" : "Good";
+    if (rating >= 2.0) return isRTL ? "مقبول" : "Fair";
+    if (rating > 0) return isRTL ? "سيء" : "Poor";
+    return isRTL ? "لا يوجد" : "N/A";
 }
 
 
 export default function Analytics({ ...props }) {
     const { user, isLoading: isUserLoading } = useUser();
+    const { locale } = useLanguage();
+    const isRTL = locale === 'ar';
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    const chartConfig = {
+      visitors: {
+        label: isRTL ? "الزوار" : "Visitors",
+        color: "hsl(var(--primary))",
+      },
+    } satisfies ChartConfig;
 
     useEffect(() => {
         if (isUserLoading) return;
@@ -63,8 +66,8 @@ export default function Analytics({ ...props }) {
           setData({
             totalVisitors: 0,
             totalQuestions: 0,
-            peakHours: "لا يوجد",
-            customerSentiment: "لا يوجد",
+            peakStartHour: null,
+            averageRating: null,
             weeklyVisitors: [],
             activityHeatMap: Array.from({length: 24}, (_, i) => ({ hour: i, activity: 0 })),
           });
@@ -74,10 +77,10 @@ export default function Analytics({ ...props }) {
         const fetchData = async () => {
             setIsLoading(true);
             try {
-                // 1. Get sessions (visitors) and messages for chat stats
+                // 1. Get assistant sessions (المساعد الذكي) لقياس التفاعل عبر الشات
                 const sessionsQuery = query(collection(db, 'restaurants', user.restaurantId!, 'ai_sessions'));
                 const sessionsSnap = await getDocs(sessionsQuery);
-                const sessions = sessionsSnap.docs.map(doc => {
+                const assistantSessions = sessionsSnap.docs.map(doc => {
                     const data = doc.data();
                     if (data.created_at && typeof data.created_at.toDate === 'function') {
                       return { id: doc.id, created_at: data.created_at as Timestamp };
@@ -85,14 +88,25 @@ export default function Analytics({ ...props }) {
                     return null;
                   }).filter((s): s is { id: string; created_at: Timestamp } => s !== null);
 
-                const messagePromises = sessions.map(s => getDocs(query(collection(db, 'restaurants', user.restaurantId!, 'ai_sessions', s.id, 'messages'))));
+                const messagePromises = assistantSessions.map(s => getDocs(query(collection(db, 'restaurants', user.restaurantId!, 'ai_sessions', s.id, 'messages'))));
                 const messageSnaps = await Promise.all(messagePromises);
                 const allMessages = messageSnaps.flatMap(snap => snap.docs.map(d => {
                     const data = d.data();
                     return { sender: data.sender || null };
                 }));
 
-                // 2. Get reviews for sentiment stats
+                // 2. Get hub visits (أي زيارة للروابط العامة مثل الهب/المنيو)
+                const hubVisitsQuery = query(collection(db, 'restaurants', user.restaurantId!, 'hub_visits'));
+                const hubVisitsSnap = await getDocs(hubVisitsQuery);
+                const hubVisits = hubVisitsSnap.docs.map(doc => {
+                    const data = doc.data();
+                    if (data.timestamp && typeof (data.timestamp as any).toDate === 'function') {
+                        return { created_at: data.timestamp as Timestamp };
+                    }
+                    return null;
+                }).filter((v): v is { created_at: Timestamp } => v !== null);
+
+                // 3. Get reviews for sentiment stats
                 const reviewsQuery = query(collection(db, 'restaurants', user.restaurantId!, 'reviews'));
                 const reviewsSnap = await getDocs(reviewsQuery);
                 const reviews = reviewsSnap.docs.map(doc => {
@@ -100,22 +114,27 @@ export default function Analytics({ ...props }) {
                     return { rating: typeof data.rating === 'number' ? data.rating : 0 };
                 });
 
-                // 3. Calculate stats
-                const totalVisitors = sessions.length;
+                // دمج جميع الأحداث التي تمثل "زيارة" أو "جلسة" (مساعد + زيارات الهب/الرابط)
+                const allEventTimestamps: Timestamp[] = [
+                    ...assistantSessions.map(s => s.created_at),
+                    ...hubVisits.map(v => v.created_at),
+                ];
+
+                // 4. Calculate stats
+                const totalVisitors = allEventTimestamps.length;
                 const totalQuestions = allMessages.filter(m => m.sender === 'user').length;
 
-                let sentiment = "لا يوجد";
+                let avgRating: number | null = null;
                 if(reviews.length > 0) {
                     const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
-                    const averageRating = totalRating / reviews.length;
-                    sentiment = getSentimentFromRating(averageRating);
+                    avgRating = totalRating / reviews.length;
                 }
                 
-                let peakHours = "لا يوجد";
-                if(sessions.length > 0) {
-                    const sessionHours = sessions.map(s => s.created_at.toDate().getHours());
+                let peakStartHour: number | null = null;
+                if(allEventTimestamps.length > 0) {
+                    const hours = allEventTimestamps.map(ts => ts.toDate().getHours());
                     const hourCounts: { [key: number]: number } = {};
-                    sessionHours.forEach(h => { hourCounts[h] = (hourCounts[h] || 0) + 1 });
+                    hours.forEach(h => { hourCounts[h] = (hourCounts[h] || 0) + 1 });
                     let peakStart = -1, maxCount = 0;
                     for(let i=0; i<24; i++){
                         if((hourCounts[i] || 0) > maxCount) {
@@ -124,19 +143,14 @@ export default function Analytics({ ...props }) {
                         }
                     }
                     if (peakStart !== -1) {
-                        const startHour12 = peakStart % 12 || 12;
-                        const startAmPm = peakStart < 12 ? 'ص' : 'م';
-                        const endHour = (peakStart + 1) % 24;
-                        const endHour12 = endHour % 12 || 12;
-                        const endAmPm = endHour < 12 ? 'ص' : 'م';
-                        peakHours = `${startHour12}${startAmPm} - ${endHour12}${endAmPm}`;
+                        peakStartHour = peakStart;
                     }
                 }
                 
                 const activityHeatMap = Array.from({length: 24}, (_, i) => {
                     const hourCounts: { [key: number]: number } = {};
-                    sessions.forEach(s => {
-                        const hour = s.created_at.toDate().getHours();
+                    allEventTimestamps.forEach(ts => {
+                        const hour = ts.toDate().getHours();
                         hourCounts[hour] = (hourCounts[hour] || 0) + 1;
                     });
                     const activity = hourCounts[i] || 0;
@@ -153,9 +167,9 @@ export default function Analytics({ ...props }) {
                 
                 const weeklyVisitorsData = daysOfWeek.map(day => {
                     const dayStr = format(day, 'yyyy-MM-dd');
-                    const visitors = sessions.filter(s => format(s.created_at.toDate(), 'yyyy-MM-dd') === dayStr).length;
+                    const visitors = allEventTimestamps.filter(ts => format(ts.toDate(), 'yyyy-MM-dd') === dayStr).length;
                     return {
-                        day: format(day, 'eee', { locale: arSA }),
+                        date: day,
                         visitors: visitors
                     };
                 });
@@ -164,8 +178,8 @@ export default function Analytics({ ...props }) {
                 setData({
                     totalVisitors,
                     totalQuestions,
-                    peakHours,
-                    customerSentiment: sentiment,
+                    peakStartHour: peakStartHour,
+                    averageRating: avgRating,
                     weeklyVisitors: weeklyVisitorsData,
                     activityHeatMap: normalizedHeatmap,
                 });
@@ -173,7 +187,9 @@ export default function Analytics({ ...props }) {
             } catch (error) {
                 console.error("Failed to fetch analytics data:", error);
                  setData({
-                    totalVisitors: 0, totalQuestions: 0, peakHours: "خطأ", customerSentiment: "خطأ",
+                    totalVisitors: 0, totalQuestions: 0, 
+                    peakStartHour: null, 
+                    averageRating: null,
                     weeklyVisitors: [], activityHeatMap: Array.from({length: 24}, (_, i) => ({ hour: i, activity: 0 }))
                 });
             } finally {
@@ -182,6 +198,28 @@ export default function Analytics({ ...props }) {
         };
         fetchData();
     }, [user, isUserLoading, props.key]);
+
+    const formatPeakHours = (peakStart: number | null): string => {
+        if (peakStart === null) return isRTL ? "لا يوجد" : "N/A";
+        const startHour12 = peakStart % 12 || 12;
+        const startAmPm = peakStart < 12 ? (isRTL ? 'ص' : 'AM') : (isRTL ? 'م' : 'PM');
+        const endHour = (peakStart + 1) % 24;
+        const endHour12 = endHour % 12 || 12;
+        const endAmPm = endHour < 12 ? (isRTL ? 'ص' : 'AM') : (isRTL ? 'م' : 'PM');
+        return `${startHour12}${startAmPm} - ${endHour12}${endAmPm}`;
+    };
+
+    const formatSentiment = (rating: number | null): string => {
+        if (rating === null) return isRTL ? "لا يوجد" : "N/A";
+        return getSentimentFromRating(rating, isRTL);
+    };
+
+    const formatWeeklyData = () => {
+        return data?.weeklyVisitors.map(item => ({
+            day: format(item.date, 'eee', { locale: isRTL ? arSA : enUS }),
+            visitors: item.visitors
+        })) || [];
+    };
 
     if (isLoading || isUserLoading || !data) {
         return (
@@ -205,39 +243,41 @@ export default function Analytics({ ...props }) {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="إجمالي زوار المساعد"
+          title={isRTL ? "إجمالي زوار المساعد" : "Total Assistant Visitors"}
           value={data.totalVisitors.toString()}
           icon={Users}
-          change="زائر فريد تفاعل مع المساعد"
+          change={isRTL ? "زائر فريد تفاعل مع المساعد" : "unique visitors interacted with assistant"}
         />
         <StatCard
-          title="الأسئلة المستلمة"
+          title={isRTL ? "الأسئلة المستلمة" : "Questions Received"}
           value={data.totalQuestions.toString()}
           icon={MessageSquare}
-          change="رسالة من العملاء"
+          change={isRTL ? "رسالة من العملاء" : "messages from customers"}
         />
         <StatCard
-          title="أوقات الذروة"
-          value={data.peakHours}
+          title={isRTL ? "أوقات الذروة" : "Peak Hours"}
+          value={formatPeakHours(data.peakStartHour)}
           icon={Clock}
-          change="بناءً على نشاط الأسبوع"
+          change={isRTL ? "بناءً على نشاط الأسبوع" : "based on weekly activity"}
         />
         <StatCard
-          title="رضا العملاء"
-          value={data.customerSentiment}
+          title={isRTL ? "رضا العملاء" : "Customer Satisfaction"}
+          value={formatSentiment(data.averageRating)}
           icon={Star}
-          change="بناءً على متوسط التقييمات"
+          change={isRTL ? "بناءً على متوسط التقييمات" : "based on average ratings"}
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">زوار هذا الأسبوع</CardTitle>
+            <CardTitle className="font-headline">
+              {isRTL ? "زوار هذا الأسبوع" : "This Week's Visitors"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[250px] w-full">
-              <BarChart accessibilityLayer data={data.weeklyVisitors} margin={{ top: 20, left: 0, right: -20, bottom: 5 }}>
+              <BarChart accessibilityLayer data={formatWeeklyData()} margin={{ top: 20, left: 0, right: -20, bottom: 5 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis
                   dataKey="day"
@@ -262,9 +302,13 @@ export default function Analytics({ ...props }) {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">خريطة النشاط اليومي</CardTitle>
+            <CardTitle className="font-headline">
+              {isRTL ? "خريطة النشاط اليومي" : "Daily Activity Map"}
+            </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              الألوان الغامقة تعني نشاط أعلى للزباين خلال الساعة.
+              {isRTL 
+                ? "الألوان الغامقة تعني نشاط أعلى للزباين خلال الساعة."
+                : "Darker colors indicate higher customer activity during that hour."}
             </p>
           </CardHeader>
           <CardContent>
@@ -294,11 +338,11 @@ export default function Analytics({ ...props }) {
                   </div>
                 </div>
                 <div className="flex justify-between mt-2 text-xs text-muted-foreground shrink-0">
-                  <span>12ص</span>
-                  <span>6ص</span>
-                  <span>12م</span>
-                  <span>6م</span>
-                  <span>11م</span>
+                  <span>{isRTL ? "12ص" : "12AM"}</span>
+                  <span>{isRTL ? "6ص" : "6AM"}</span>
+                  <span>{isRTL ? "12م" : "12PM"}</span>
+                  <span>{isRTL ? "6م" : "6PM"}</span>
+                  <span>{isRTL ? "11م" : "11PM"}</span>
                 </div>
             </div>
           </CardContent>

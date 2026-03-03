@@ -11,6 +11,8 @@ export type Profile = {
   restaurant_name?: string; // Denormalized for easier access
   restaurant_id?: string | null; // FK to restaurants collection
   admin_permissions?: string[];
+  // Flag to control one-time AI trial access for free plans
+  ai_trial_used?: boolean;
 };
 
 // Represents a record from the 'restaurants' table. Defines WHAT the user owns.
@@ -18,9 +20,11 @@ export type Restaurant = {
   id: string;
   owner_id: string; // FK to profiles.id
   name: string;
+  name_en?: string; // English name
   username: string;
   username_last_updated_at?: any; // Can be Firestore Timestamp
   description: string | null;
+  description_en?: string | null; // English description
   logo: string | null;
   primaryColor: string | null;
   secondaryColor: string | null;
@@ -59,11 +63,17 @@ export type Branch = {
   id: string;
   restaurant_id: string;
   name: string;
+  name_en?: string; // English name
   city: string;
+  city_en?: string; // English city
   district: string;
+  district_en?: string; // English district
   address: string;
+  address_en?: string; // English address
   phone?: string;
   google_maps_url?: string;
+  opening_hours?: string;
+  opening_hours_en?: string; // English opening hours
   status: 'active' | 'inactive';
   latitude?: number;
   longitude?: number;
@@ -72,6 +82,7 @@ export type Branch = {
 export type MenuItemSize = {
   id: string;
   name: string;
+  name_en?: string; // English size name
   price: number;
   cost: number;
   calories?: number;
@@ -80,8 +91,11 @@ export type MenuItemSize = {
 export type MenuItem = {
   id: string;
   name: string;
+  name_en?: string; // English name
   description: string;
+  description_en?: string; // English description
   category: string;
+  category_en?: string; // English category
   image_url: string;
   status: 'available' | 'unavailable';
   display_tags: 'new' | 'best_seller' | 'daily_offer' | 'none';
@@ -92,7 +106,6 @@ export type MenuItem = {
   description_last_generated_at?: any;
   createdAt?: any;
   clicks_count?: number;
-  // حقول تحليلية تُحسب في الواجهة (لا تُخزن مباشرة في Firestore)
   profit?: number;
   profitMargin?: number;
   popularity?: number;
@@ -102,7 +115,9 @@ export type MenuItem = {
 export type Offer = {
   id: string;
   title: string;
+  title_en?: string; // English title
   description: string;
+  description_en?: string; // English description
   image_url: string;
   external_link?: string;
   valid_until: any; // Stored as ISO string or Timestamp
@@ -187,9 +202,12 @@ export type SupportTicket = {
 export type Tool = {
   id: string;
   title: string;
+  title_en?: string; // English title
   description: string;
+  description_en?: string; // English description
   category: "marketing" | "operations" | "analytics";
   price_label: string;
+  price_label_en?: string; // English price label
   icon: string;
   color: string;
   bg_color: string;
@@ -255,7 +273,9 @@ export type GeneratedImage = {
 export type Plan = {
     id: string;
     name: string;
+    name_en?: string; // English name
     description: string;
+    description_en?: string; // English description
     price: number;
     duration_months: number;
     is_active: boolean;

@@ -1,284 +1,468 @@
 'use client';
 
-import { useState, useTransition, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useToast } from "@/hooks/use-toast";
-import { Loader2, MapPin, Check, ChevronsUpDown, Search, ArrowLeft } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, doc, addDoc, updateDoc, increment } from "firebase/firestore";
+import { collection, doc, addDoc, updateDoc } from 'firebase/firestore';
 import saGeodata from '@/data/sa-geodata.json';
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
-import { fetchPlaceDetails } from "@/ai/flows/fetch-place-details";
-import { searchPlaces, SearchPlacesOutput } from "@/ai/flows/search-places";
-import { Label } from "../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { Branch } from '@/lib/types';
 
-const formSchema = z.object({
-  name: z.string().min(2, "اسم الفرع مطلوب (مثال: فرع العليا)"),
-  city: z.string().min(3, "اسم المدينة مطلوب"),
-  district: z.string().min(3, "اسم الحي مطلوب"),
-  address: z.string().min(10, "العنوان التفصيلي مطلوب"),
+const schema = z.object({
+  name: z.string().min(2, 'اسم الفرع مطلوب'),
+  name_en: z.string().optional(),
+  city: z.string().min(2, 'اختر المدينة'),
+  city_en: z.string().optional(),
+  district: z.string().min(2, 'اختر الحي'),
+  district_en: z.string().optional(),
+  address: z.string().min(5, 'العنوان مطلوب'),
+  address_en: z.string().optional(),
   phone: z.string().optional(),
-  google_maps_url: z.string().url({ message: "الرجاء إدخال رابط خرائط جوجل صحيح" }).optional().or(z.literal('')),
-  latitude: z.coerce.number().optional(),
-  longitude: z.coerce.number().optional(),
-  status: z.enum(['active', 'inactive']).default('active'),
+  opening_hours: z.string().max(200).optional(),
+  opening_hours_en: z.string().max(200).optional(),
+  status: z.enum(['active', 'inactive']),
 });
 
-type FormValues = z.infer<typeof formSchema>;
-type Stage = 'search' | 'select' | 'fetching' | 'confirm';
+type FormValues = z.infer<typeof schema>;
+
+const cities = Object.keys(saGeodata) as string[];
 
 interface EditBranchDialogProps {
-  children: React.ReactNode;
-  branch?: any;
-  onSave?: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  branch?: Branch | null;
   restaurantId: string;
+  onSaved?: () => void;
 }
 
-const cities = Object.keys(saGeodata);
-
-export function EditBranchDialog({ children, branch, onSave, restaurantId }: EditBranchDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [isSaving, startSaving] = useTransition();
-  const [isFetching, startFetching] = useTransition();
-  const [stage, setStage] = useState<Stage>('search');
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchPlacesOutput['places']>([]);
-
+export function EditBranchDialog({
+  open,
+  onOpenChange,
+  branch,
+  restaurantId,
+  onSaved,
+}: EditBranchDialogProps) {
   const { toast } = useToast();
-  const isEditing = !!branch;
+  const [saving, setSaving] = useState(false);
+  const isEdit = Boolean(branch?.id);
+  const [allDaysOpen, setAllDaysOpen] = useState('');
+  const [allDaysClose, setAllDaysClose] = useState('');
+  const [fridayOpen, setFridayOpen] = useState('');
+  const [fridayClose, setFridayClose] = useState('');
 
-  const [cityOpen, setCityOpen] = useState(false);
-  const [districtOpen, setDistrictOpen] = useState(false);
-  
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: { name: "", city: "", district: "", address: "", phone: "", google_maps_url: "", status: 'active' }
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name: '',
+      name_en: '',
+      city: '',
+      city_en: '',
+      district: '',
+      district_en: '',
+      address: '',
+      address_en: '',
+      phone: '',
+      opening_hours: '',
+      opening_hours_en: '',
+      status: 'active',
+    },
   });
 
-  const selectedCity = form.watch('city');
-  const districts = saGeodata[selectedCity as keyof typeof saGeodata] || [];
-
-  const resetDialog = () => {
-    form.reset();
-    setStage('search');
-    setSearchQuery("");
-    setSearchResults([]);
-  };
+  const city = form.watch('city');
+  const districts = (saGeodata as Record<string, string[]>)[city] ?? [];
 
   useEffect(() => {
-    if (open) {
-      if (isEditing && branch) {
-        form.reset({
-            ...branch,
-            phone: branch.phone ?? "",
-            google_maps_url: branch.google_maps_url ?? "",
-        });
-        setStage('confirm');
-      } else {
-        resetDialog();
-      }
-    }
-  }, [open, branch, isEditing, form]);
-
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-      if (!searchQuery) {
-          toast({ title: "الرجاء إدخال اسم للبحث", variant: "destructive" });
-          return;
-      }
-      startFetching(async () => {
-        try {
-          // Client-side counter increment (Requires Auth)
-          if (restaurantId) {
-            const restaurantRef = doc(db, 'restaurants', restaurantId);
-            updateDoc(restaurantRef, { maps_search_daily_count: increment(1) }).catch(() => {});
-          }
-
-          const results = await searchPlaces({ query: searchQuery });
-          if(results.places.length === 0){
-            toast({ title: "لم يتم العثور على نتائج", description: "حاول استخدام اسم أو عنوان أكثر تحديداً." });
-            return;
-          }
-          setSearchResults(results.places);
-          setStage('select');
-        } catch (error: any) {
-          toast({ title: "خطأ في البحث", description: error.message, variant: "destructive" });
-        }
+    if (!open) return;
+    if (branch) {
+      form.reset({
+        name: branch.name,
+        name_en: branch.name_en ?? '',
+        city: branch.city,
+        city_en: branch.city_en ?? '',
+        district: branch.district,
+        district_en: branch.district_en ?? '',
+        address: branch.address,
+        address_en: branch.address_en ?? '',
+        phone: branch.phone ?? '',
+        opening_hours: branch.opening_hours ?? '',
+        opening_hours_en: branch.opening_hours_en ?? '',
+        status: branch.status ?? 'active',
       });
-  };
+      setAllDaysOpen('');
+      setAllDaysClose('');
+      setFridayOpen('');
+      setFridayClose('');
+    } else {
+      form.reset({
+        name: '',
+        name_en: '',
+        city: '',
+        city_en: '',
+        district: '',
+        district_en: '',
+        address: '',
+        address_en: '',
+        phone: '',
+        opening_hours: '',
+        opening_hours_en: '',
+        status: 'active',
+      });
+      setAllDaysOpen('');
+      setAllDaysClose('');
+      setFridayOpen('');
+      setFridayClose('');
+    }
+  }, [open, branch, form]);
 
-  const handleSelectPlace = (placeId: string) => {
-    startFetching(async () => {
-      setStage('fetching');
-      try {
-        // Client-side counter increment (Requires Auth)
-        if (restaurantId) {
-            const restaurantRef = doc(db, 'restaurants', restaurantId);
-            updateDoc(restaurantRef, { maps_details_daily_count: increment(1) }).catch(() => {});
-        }
-
-        const details = await fetchPlaceDetails({ placeId });
-        form.reset({
-          name: details.name || "",
-          address: details.address || "",
-          city: details.city || "",
-          district: details.district || "",
-          phone: details.phone || "",
-          google_maps_url: details.google_maps_url || "",
-          latitude: details.latitude,
-          longitude: details.longitude,
-          status: 'active',
-        });
-        setStage('confirm');
-        toast({ title: "تم جلب بيانات الفرع بنجاح!", description: "يرجى مراجعة البيانات قبل الحفظ." });
-      } catch (error: any) {
-        toast({ title: "خطأ في جلب التفاصيل", description: error.message, variant: "destructive" });
-        setStage('select');
-      }
-    });
-  };
+  useEffect(() => {
+    if (!city) form.setValue('district', '');
+  }, [city, form]);
 
   async function onSubmit(values: FormValues) {
-    if (!restaurantId) return toast({ variant: "destructive", title: "خطأ", description: "معرف المشروع غير موجود." });
-    
-    startSaving(async () => {
-        try {
-          const branchData = { ...values, restaurant_id: restaurantId };
-          const branchesCollection = collection(db, 'restaurants', restaurantId, 'branches');
-          if (isEditing) {
-              const branchRef = doc(branchesCollection, branch.id);
-              await updateDoc(branchRef, branchData);
-          } else {
-              await addDoc(branchesCollection, branchData);
-          }
-          toast({ title: `تم ${isEditing ? 'تعديل' : 'إضافة'} الفرع بنجاح` });
-          onSave?.();
-          setOpen(false);
-        } catch (error: any) {
-           toast({ variant: "destructive", title: "حدث خطأ", description: error.message });
-        }
-    });
-  }
+    if (!restaurantId) return;
+    setSaving(true);
+    try {
+      const data: Record<string, unknown> = {
+        name: values.name,
+        city: values.city,
+        district: values.district,
+        address: values.address,
+        status: values.status,
+        restaurant_id: restaurantId,
+      };
+      if (values.name_en?.trim()) data.name_en = values.name_en.trim();
+      if (values.city_en?.trim()) data.city_en = values.city_en.trim();
+      if (values.district_en?.trim()) data.district_en = values.district_en.trim();
+      if (values.address_en?.trim()) data.address_en = values.address_en.trim();
+      if (values.phone?.trim()) data.phone = values.phone.trim();
+      if (values.opening_hours?.trim()) data.opening_hours = values.opening_hours.trim();
+      if (values.opening_hours_en?.trim()) data.opening_hours_en = values.opening_hours_en.trim();
 
-  const renderContent = () => {
-      if (isFetching) {
-          return (
-              <div className="flex flex-col items-center justify-center min-h-[300px] gap-3">
-                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                  <p className="text-muted-foreground">جاري جلب البيانات...</p>
-              </div>
-          )
+      const ref = collection(db, 'restaurants', restaurantId, 'branches');
+      if (isEdit && branch?.id) {
+        await updateDoc(doc(ref, branch.id), data);
+        toast({ title: 'تم تحديث الفرع' });
+      } else {
+        await addDoc(ref, data);
+        toast({ title: 'تمت إضافة الفرع' });
       }
-
-      if (stage === 'search') {
-          return (
-            <form onSubmit={handleSearch} className="py-4 space-y-4">
-             <div className="space-y-2">
-                <Label htmlFor="searchQuery">ابحث عن اسم المطعم أو عنوانه</Label>
-                <div className="flex gap-2">
-                  <Input id="searchQuery" placeholder="مثال: مطعم البيك، حي الياسمين" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                  <Button type="submit" disabled={isFetching}><Search className="ml-2 h-4 w-4" /> بحث</Button>
-                </div>
-             </div>
-            </form>
-          )
-      }
-      
-      if (stage === 'select') {
-        return (
-          <div className="py-4 space-y-3">
-            <h3 className="font-bold">اختر الفرع الصحيح من القائمة:</h3>
-            <div className="max-h-[350px] overflow-y-auto space-y-2 border rounded-lg p-2">
-              {searchResults.map((place) => (
-                <div key={place.id} onClick={() => handleSelectPlace(place.id)} className="flex items-center gap-3 p-3 rounded-md hover:bg-muted cursor-pointer">
-                  <MapPin className="h-5 w-5 text-muted-foreground shrink-0"/>
-                  <div className="flex-1">
-                    <p className="font-semibold">{place.displayName}</p>
-                    <p className="text-xs text-muted-foreground">{place.formattedAddress}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      }
-
-      if (stage === 'confirm') {
-          return (
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-                <FormField control={form.control} name="name" render={({ field }) => (
-                  <FormItem><FormLabel>اسم الفرع</FormLabel><FormControl><Input placeholder="مثال: فرع العليا" {...field} /></FormControl><FormMessage /></FormItem>
-                )}/>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField control={form.control} name="city" render={({ field }) => (
-                    <FormItem className="flex flex-col"><FormLabel>المدينة</FormLabel><Popover open={cityOpen} onOpenChange={setCityOpen}><PopoverTrigger asChild><FormControl><Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>{field.value ? cities.find(c => c === field.value) || field.value : "اختر مدينة..."}<ChevronsUpDown className="mr-auto h-4 w-4 shrink-0 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="ابحث..." /><CommandList><CommandEmpty>لم يتم العثور.</CommandEmpty><CommandGroup>{cities.map(city => (<CommandItem value={city} key={city} onSelect={() => { form.setValue("city", city); form.setValue("district", ""); setCityOpen(false); }}> <Check className={cn("mr-2 h-4 w-4", city === field.value ? "opacity-100" : "opacity-0")} />{city}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent></Popover><FormMessage /></FormItem>
-                  )}/>
-                   <FormField control={form.control} name="district" render={({ field }) => (
-                    <FormItem className="flex flex-col"><FormLabel>الحي</FormLabel><Popover open={districtOpen} onOpenChange={setDistrictOpen}><PopoverTrigger asChild><FormControl><Button variant="outline" role="combobox" disabled={!selectedCity || districts.length === 0} className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>{field.value ? districts.find(d => d === field.value) || field.value : "اختر الحي..."}<ChevronsUpDown className="mr-auto h-4 w-4 shrink-0 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="ابحث..." /><CommandList><CommandEmpty>لم يتم العثور.</CommandEmpty><CommandGroup>{districts.map(district => (<CommandItem value={district} key={district} onSelect={() => { form.setValue("district", district); setDistrictOpen(false); }}><Check className={cn("mr-2 h-4 w-4", district === field.value ? "opacity-100" : "opacity-0")} />{district}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent></Popover><FormMessage /></FormItem>
-                  )}/>
-                </div>
-                <FormField control={form.control} name="address" render={({ field }) => (
-                  <FormItem><FormLabel>العنوان التفصيلي</FormLabel><FormControl><Input placeholder="شارع الأمير محمد بن سعد..." {...field} /></FormControl><FormMessage /></FormItem>
-                )}/>
-                <FormField control={form.control} name="phone" render={({ field }) => (
-                  <FormItem><FormLabel>رقم هاتف الفرع (اختياري)</FormLabel><FormControl><Input placeholder="011xxxxxxx" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                )}/>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField control={form.control} name="latitude" render={({ field }) => ( <FormItem><FormLabel>خط العرض (Latitude)</FormLabel><FormControl><Input type="number" step="any" placeholder="24.7136" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="longitude" render={({ field }) => ( <FormItem><FormLabel>خط الطول (Longitude)</FormLabel><FormControl><Input type="number" step="any" placeholder="46.6753" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                </div>
-                <FormField control={form.control} name="status" render={({ field }) => (
-                    <FormItem className="space-y-3"><FormLabel>حالة الفرع</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="active" /></FormControl><FormLabel className="font-normal">نشط</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="inactive" /></FormControl><FormLabel className="font-normal">غير نشط</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
-                )}/>
-              </form>
-            </Form>
-          );
-      }
-      return null;
-  }
-
-  const renderFooter = () => {
-    if (stage === 'select') {
-       return <Button type="button" variant="outline" onClick={() => { setStage('search'); setSearchResults([]); }}><ArrowLeft className="ml-2 h-4 w-4"/> الرجوع للبحث</Button>
+      onSaved?.();
+      onOpenChange(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ variant: 'destructive', title: 'خطأ', description: msg });
+    } finally {
+      setSaving(false);
     }
-    if (stage === 'confirm') {
-      return (
-        <div className="w-full flex justify-between">
-            <Button type="button" variant="outline" onClick={() => { setStage('search'); setSearchResults([]); }}><ArrowLeft className="ml-2 h-4 w-4"/> ابحث عن فرع آخر</Button>
-            <Button type="button" onClick={form.handleSubmit(onSubmit)} disabled={isSaving}>
-              {isSaving ? <Loader2 className="animate-spin" /> : (isEditing ? "حفظ التعديلات" : "إضافة الفرع")}
-            </Button>
-        </div>
-      );
-    }
-    return null;
-  };
-
+  }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) resetDialog(); setOpen(isOpen); }}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'تعديل فرع' : 'إضافة فرع جديد'}</DialogTitle>
-          <DialogDescription>{isEditing ? 'قم بتعديل تفاصيل الفرع أدناه.' : 'ابحث عن فرعك باستخدام خرائط جوجل لتعبئة البيانات تلقائياً.'}</DialogDescription>
+          <DialogTitle>{isEdit ? 'تعديل الفرع' : 'إضافة فرع جديد'}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? 'عدّل البيانات ثم احفظ.' : 'أدخل بيانات الفرع.'}
+          </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto pr-2 -mr-2">
-            {renderContent()}
-        </div>
-        <DialogFooter className="pt-4 border-t">
-          {renderFooter()}
-        </DialogFooter>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>اسم الفرع</FormLabel>
+                  <FormControl>
+                    <Input placeholder="مثال: فرع العليا" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="name_en"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Branch Name (English - Optional)</FormLabel>
+                  <FormControl>
+                    <Input dir="ltr" placeholder="e.g. Olaya Branch" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>المدينة</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر المدينة" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {cities.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="district"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>الحي</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={!city || districts.length === 0}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر الحي" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {districts.map((d) => (
+                          <SelectItem key={d} value={d}>
+                            {d}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="address"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>العنوان</FormLabel>
+                  <FormControl>
+                    <Input placeholder="الشارع والحي..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="address_en"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Address (English - Optional)</FormLabel>
+                  <FormControl>
+                    <Input dir="ltr" placeholder="Street and district..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>الهاتف (اختياري)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="05xxxxxxxx" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="space-y-2 rounded-md border px-3 py-2">
+              <p className="text-sm font-medium">أوقات العمل (اختياري)</p>
+              <p className="text-xs text-muted-foreground">
+                اختر الأوقات وسيتم توليد النص تلقائياً. يمكن تعديل النص يدوياً إذا رغبت.
+              </p>
+              <div className="space-y-2">
+                <div className="flex flex-col gap-1 items-start">
+                  <span className="text-sm font-medium">كل الأيام</span>
+                  <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                    <Input
+                      type="time"
+                      value={allDaysOpen}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setAllDaysOpen(next);
+                        const close = allDaysClose;
+                        const friO = fridayOpen;
+                        const friC = fridayClose;
+                        let text = '';
+                        if (next && close) {
+                          text = `يوميًا ${next} - ${close}`;
+                          if (friO && friC) {
+                            text += ` (الجمعة ${friO} - ${friC})`;
+                          }
+                        }
+                        form.setValue('opening_hours', text, { shouldDirty: true });
+                      }}
+                      className="w-full"
+                    />
+                    <span className="text-xs text-muted-foreground text-center">إلى</span>
+                    <Input
+                      type="time"
+                      value={allDaysClose}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setAllDaysClose(next);
+                        const open = allDaysOpen;
+                        const friO = fridayOpen;
+                        const friC = fridayClose;
+                        let text = '';
+                        if (open && next) {
+                          text = `يوميًا ${open} - ${next}`;
+                          if (friO && friC) {
+                            text += ` (الجمعة ${friO} - ${friC})`;
+                          }
+                        }
+                        form.setValue('opening_hours', text, { shouldDirty: true });
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1 items-start">
+                  <span className="text-sm font-medium">الجمعة (اختياري)</span>
+                  <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                    <Input
+                      type="time"
+                      value={fridayOpen}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setFridayOpen(next);
+                        const allO = allDaysOpen;
+                        const allC = allDaysClose;
+                        const friC = fridayClose;
+                        let text = '';
+                        if (allO && allC) {
+                          text = `يوميًا ${allO} - ${allC}`;
+                          if (next && friC) {
+                            text += ` (الجمعة ${next} - ${friC})`;
+                          }
+                        }
+                        form.setValue('opening_hours', text, { shouldDirty: true });
+                      }}
+                      className="w-full"
+                    />
+                    <span className="text-xs text-muted-foreground text-center">إلى</span>
+                    <Input
+                      type="time"
+                      value={fridayClose}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setFridayClose(next);
+                        const allO = allDaysOpen;
+                        const allC = allDaysClose;
+                        const friO = fridayOpen;
+                        let text = '';
+                        if (allO && allC) {
+                          text = `يوميًا ${allO} - ${allC}`;
+                          if (friO && next) {
+                            text += ` (الجمعة ${friO} - ${next})`;
+                          }
+                        }
+                        form.setValue('opening_hours', text, { shouldDirty: true });
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+              <FormField
+                control={form.control}
+                name="opening_hours"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">ملخص أوقات العمل</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        rows={2}
+                        placeholder="مثال: يوميًا 10:00 - 23:00 (الجمعة 14:00 - 23:00)"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>الحالة</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="active">نشط</SelectItem>
+                      <SelectItem value="inactive">غير نشط</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                إلغاء
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                {saving ? 'جاري الحفظ...' : isEdit ? 'حفظ' : 'إضافة'}
+              </Button>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

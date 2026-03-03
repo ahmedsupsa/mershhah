@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { DashboardAssistant } from "@/components/dashboard/DashboardAssistant";
 import { SessionTimeout } from "@/components/shared/SessionTimeout";
+import { useLanguage } from "@/components/shared/LanguageContext";
 
 export default function OwnerLayout({
   children,
@@ -22,6 +23,8 @@ export default function OwnerLayout({
 }) {
   const { user, isLoading } = useUser();
   const router = useRouter();
+  const { locale, dir } = useLanguage();
+  const isRTL = locale === 'ar';
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -38,10 +41,10 @@ export default function OwnerLayout({
   }
 
   return (
-      <>
+      <div dir={dir}>
         <SessionTimeout />
         <SidebarProvider>
-          <Sidebar side="right">
+          <Sidebar side={isRTL ? "right" : "left"}>
             <OwnerSidebar />
           </Sidebar>
           <div className="min-h-screen w-full bg-muted/40">
@@ -56,6 +59,6 @@ export default function OwnerLayout({
               </SidebarInset>
           </div>
         </SidebarProvider>
-      </>
+      </div>
   );
 }

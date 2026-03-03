@@ -33,6 +33,8 @@ import {
 import { Logo } from "./Logo";
 import { Separator } from "../ui/separator";
 import Link from "next/link";
+import { LanguageSwitcherSimple } from "./LanguageSwitcher";
+import { useLanguage } from "./LanguageContext";
 import { 
   Collapsible, 
   CollapsibleContent, 
@@ -51,26 +53,28 @@ export function OwnerSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useUser();
+  const { locale } = useLanguage();
+  const isRTL = locale === 'ar';
   const [isToolsOpen, setIsToolsOpen] = useState(true);
   
   const [activatedTools, setActivatedTools] = useState<any[]>([]);
   const [isLoadingTools, setIsLoadingTools] = useState(true);
 
   const menuItems = [
-    { href: "/owner/dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
-    { href: "/owner/menu", label: "إدارة المنيو", icon: Utensils },
-    { href: "/owner/pricing", label: "مركز التقارير", icon: BarChart3 },
-    { href: "/owner/offers", label: "إدارة العروض", icon: Megaphone },
-    { href: "/owner/reviews", label: "التقييمات", icon: Star },
-    { href: "/owner/branches", label: "إدارة الفروع", icon: Building2 },
-    { href: "/owner/customize", label: "تخصيص الواجهة", icon: Palette },
-    { href: "/owner/studio", label: "الاستوديو", icon: GalleryHorizontal },
-    { href: "/owner/store", label: "متجر الأدوات", icon: Store },
+    { href: "/owner/dashboard", label: isRTL ? "لوحة التحكم" : "Dashboard", icon: LayoutDashboard },
+    { href: "/owner/menu", label: isRTL ? "إدارة المنيو" : "Menu Management", icon: Utensils },
+    { href: "/owner/pricing", label: isRTL ? "مركز التقارير" : "Reports Center", icon: BarChart3 },
+    { href: "/owner/offers", label: isRTL ? "إدارة العروض" : "Offers Management", icon: Megaphone },
+    { href: "/owner/reviews", label: isRTL ? "التقييمات" : "Reviews", icon: Star },
+    { href: "/owner/branches", label: isRTL ? "إدارة الفروع" : "Branch Management", icon: Building2 },
+    { href: "/owner/customize", label: isRTL ? "تخصيص الواجهة" : "Customize Interface", icon: Palette },
+    { href: "/owner/studio", label: isRTL ? "الاستوديو" : "Studio", icon: GalleryHorizontal },
+    { href: "/owner/store", label: isRTL ? "متجر الأدوات" : "Tools Store", icon: Store },
   ];
 
   const supportItems = [
-    { href: "/owner/support", label: "الدعم المباشر", icon: MessageSquare },
-    { href: "/owner/tickets", label: "تذاكر الدعم", icon: Ticket },
+    { href: "/owner/support", label: isRTL ? "الدعم المباشر" : "Live Support", icon: MessageSquare },
+    { href: "/owner/tickets", label: isRTL ? "تذاكر الدعم" : "Support Tickets", icon: Ticket },
   ];
 
   useEffect(() => {
@@ -148,10 +152,10 @@ export function OwnerSidebar() {
             >
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip="أدواتي المفعلة">
+                  <SidebarMenuButton tooltip={isRTL ? "أدواتي المفعلة" : "My Activated Tools"}>
                     <Box />
-                    <span>أدواتي المفعلة</span>
-                    <ChevronDown className="mr-auto" />
+                    <span>{isRTL ? "أدواتي المفعلة" : "My Activated Tools"}</span>
+                    <ChevronDown className={isRTL ? "mr-auto" : "ml-auto"} />
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -203,15 +207,20 @@ export function OwnerSidebar() {
             <SidebarMenuButton asChild isActive={pathname === "/owner/settings"}>
               <Link href="/owner/settings">
                 <Settings />
-                <span>الإعدادات</span>
+                <span>{isRTL ? "الإعدادات" : "Settings"}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handleLogout} className="text-destructive hover:text-destructive">
               <LogOut />
-              <span>تسجيل الخروج</span>
+              <span>{isRTL ? "تسجيل الخروج" : "Logout"}</span>
             </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <div className="px-2 py-1">
+              <LanguageSwitcherSimple />
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

@@ -235,17 +235,19 @@ export default function RestaurantHubPage() {
 
                 {/* 2. المساعد والروابط */}
                 <section className="space-y-3">
-                    {/* المساعد الذكي - عرض كامل */}
-                    <Link href={`/ai/${username}`} className="block">
-                        <div className="flex items-center gap-4 p-4 rounded-2xl text-white shadow-md transition-all h-[64px]" style={{ backgroundColor: primaryColor }}>
-                            <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/20 backdrop-blur-md border border-white/30">
-                                <Bot className="h-6 w-6" />
+                    {/* المساعد الذكي للعملاء - يظهر فقط في الباقات المدفوعة */}
+                    {restaurant.is_paid_plan && (
+                        <Link href={`/ai/${username}`} className="block">
+                            <div className="flex items-center gap-4 p-4 rounded-2xl text-white shadow-md transition-all h-[64px]" style={{ backgroundColor: primaryColor }}>
+                                <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/20 backdrop-blur-md border border-white/30">
+                                    <Bot className="h-6 w-6" />
+                                </div>
+                                <div className="flex-1 text-right">
+                                    <span className="font-black text-lg block">المساعد الذكي</span>
+                                </div>
                             </div>
-                            <div className="flex-1 text-right">
-                                <span className="font-black text-lg block">المساعد الذكي</span>
-                            </div>
-                        </div>
-                    </Link>
+                        </Link>
+                    )}
 
                     <div className="grid grid-cols-2 gap-3">
                         {/* قائمة الطعام */}
@@ -256,18 +258,6 @@ export default function RestaurantHubPage() {
                                 </div>
                                 <div className="flex-1 text-right min-w-0">
                                     <span className="font-black text-sm text-gray-900 block truncate">المنيو</span>
-                                </div>
-                            </div>
-                        </Link>
-
-                        {/* الفروع */}
-                        <Link href={`/branches/${username}`} className="block">
-                            <div className="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all h-[64px]">
-                                <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-blue-100 text-blue-600 shrink-0">
-                                    <MapPin className="h-6 w-6" />
-                                </div>
-                                <div className="flex-1 text-right min-w-0">
-                                    <span className="font-black text-sm text-gray-900 block truncate">الفروع</span>
                                 </div>
                             </div>
                         </Link>

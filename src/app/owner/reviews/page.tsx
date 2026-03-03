@@ -120,6 +120,16 @@ export default function ReviewsPage() {
     
     startAnalysis(async () => {
       try {
+        // في الباقة المجانية نسمح بتجربة واحدة للأدوات الذكية ثم نغلقها
+        if (user.entitlements.planId === 'free' && !user.ai_trial_used) {
+          try {
+            const profileRef = doc(db, 'profiles', user.uid);
+            await updateDoc(profileRef, { ai_trial_used: true });
+          } catch {
+            // تجاهل أي خطأ في تحديث العلم دون إيقاف التحليل
+          }
+        }
+
         const restaurantRef = doc(db, 'restaurants', user.restaurantId!);
         const restaurantSnap = await getDoc(restaurantRef);
         if (!restaurantSnap.exists()) throw new Error("لم يتم العثور على بيانات المشروع.");

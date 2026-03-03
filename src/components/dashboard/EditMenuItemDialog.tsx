@@ -39,9 +39,12 @@ const sizeSchema = z.object({
 
 const formSchema = z.object({
   name: z.string().min(2, "الاسم مطلوب"),
+  name_en: z.string().optional(),
   description: z.string().min(10, "الوصف يجب أن يكون 10 أحرف على الأقل"),
+  description_en: z.string().optional(),
   image_url: z.string().optional().or(z.literal("")),
   category: z.string().min(2, "اسم الصنف مطلوب"),
+  category_en: z.string().optional(),
   sizes: z.array(sizeSchema).min(1, "يجب إضافة حجم واحد على الأقل."),
   status: z.enum(['available', 'unavailable']).default('available'),
 });
@@ -102,12 +105,18 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
 
       form.reset(isEditing ? {
         ...menuItem,
+        name_en: menuItem.name_en || "",
+        description_en: menuItem.description_en || "",
+        category_en: menuItem.category_en || "",
         image_url: menuItem.image_url || "",
         sizes: sizes
       } : {
         name: "",
+        name_en: "",
         description: "",
+        description_en: "",
         category: "",
+        category_en: "",
         image_url: "",
         sizes: defaultSizes,
         status: 'available',
@@ -258,6 +267,17 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
                                 />
                                 <FormField
                                     control={form.control}
+                                    name="name_en"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Item Name (English - Optional)</FormLabel>
+                                        <FormControl><Input dir="ltr" placeholder="e.g. Lamb Kebab" {...field} disabled={isActionPending} /></FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
                                     name="description"
                                     render={({ field }) => (
                                         <FormItem>
@@ -269,6 +289,17 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
                                             </Button>
                                         </div>
                                         <FormControl><Textarea placeholder="وصف جذاب للطبق..." {...field} disabled={isActionPending} rows={3} /></FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="description_en"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Description (English - Optional)</FormLabel>
+                                        <FormControl><Textarea dir="ltr" placeholder="An appetizing description of the dish..." {...field} disabled={isActionPending} rows={2} /></FormControl>
                                         <FormMessage />
                                         </FormItem>
                                     )}

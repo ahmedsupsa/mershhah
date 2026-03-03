@@ -71,8 +71,12 @@ Create a single, beautiful image that combines professional food photography wit
 Your final output should be a single, complete advertisement image.`;
 
     const { media } = await ai.generate({
-        model: 'googleai/imagen-3-fast-generate-001',
+        // Gemini 2.5 Flash Image (Nano Banana)
+        model: 'googleai/gemini-2.5-flash-image',
         prompt: promptText,
+        config: {
+            responseModalities: ['IMAGE'],
+        },
     });
 
     if (!media?.url) {

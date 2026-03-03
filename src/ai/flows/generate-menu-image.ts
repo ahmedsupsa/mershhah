@@ -46,8 +46,12 @@ export async function generateMenuImage(input: GenerateMenuImageInput): Promise<
     const finalPrompt = `${basePrompt}\n${stylePrompt}\n${customInstructionPrompt}`;
 
     const { media } = await ai.generate({
-        model: 'googleai/imagen-3-fast-generate-001',
+        // Gemini 2.5 Flash Image (Nano Banana)
+        model: 'googleai/gemini-2.5-flash-image',
         prompt: finalPrompt,
+        config: {
+            responseModalities: ['IMAGE'],
+        },
     });
 
     if (!media?.url) {

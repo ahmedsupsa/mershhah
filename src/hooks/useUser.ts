@@ -114,23 +114,31 @@ export function useUser() {
                   }
               });
               
-              let newEntitlements = defaultEntitlements;
-              if (activeSub) {
-                const isPaidPlan = activeSub.plan_id !== 'free' && activeSub.plan_id !== 'none';
-                newEntitlements = {
-                  planId: activeSub.plan_id,
-                  planName: activeSub.plan_name,
-                  endDate: activeSub.end_date.toDate(),
-                  canUseAiAnalysis: isPaidPlan,
-                  canUseStudioImageGeneration: isPaidPlan,
-                  canUseDashboardAgent: isPaidPlan,
-                };
-              }
-              
-              setUser(currentUser => currentUser ? {
-                  ...currentUser, 
-                  entitlements: newEntitlements 
-              } : null);
+              setUser(currentUser => {
+                  if (!currentUser) return null;
+
+                  let newEntitlements = defaultEntitlements;
+
+                  if (activeSub) {
+                    const isPaidPlan = activeSub.plan_id !== 'free' && activeSub.plan_id !== 'none';
+                    const hasTrial = !isPaidPlan && !currentUser.ai_trial_used;
+                    const enableAi = isPaidPlan || hasTrial;
+
+                    newEntitlements = {
+                      planId: activeSub.plan_id,
+                      planName: activeSub.plan_name,
+                      endDate: activeSub.end_date.toDate(),
+                      canUseAiAnalysis: enableAi,
+                      canUseStudioImageGeneration: enableAi,
+                      canUseDashboardAgent: enableAi,
+                    };
+                  }
+
+                  return {
+                      ...currentUser,
+                      entitlements: newEntitlements,
+                  };
+              });
 
               setIsLoading(false);
             }, async (serverError) => {

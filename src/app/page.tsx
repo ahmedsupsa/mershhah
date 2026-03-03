@@ -18,6 +18,7 @@ import {
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { PublicFooter } from '@/components/shared/PublicFooter';
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 
 export default function HomePage() {
   const [currentYear, setCurrentYear] = useState<number | null>(null);
@@ -65,6 +66,7 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100 py-4 px-6 md:px-12 flex justify-between items-center">
           <Logo />
           <div className="flex items-center gap-2 md:gap-4">
+              <LanguageSwitcher />
               <Button asChild variant="ghost" className="hidden sm:flex font-bold">
                   <Link href="/login">تسجيل الدخول</Link>
               </Button>

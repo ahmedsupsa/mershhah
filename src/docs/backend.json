@@ -185,25 +185,6 @@
       },
       "required": ["name", "platform_id", "logo_url", "category"]
     },
-    "Branch": {
-      "title": "فرع مطعم",
-      "description": "يمثل فرعًا ماديًا واحدًا لمطعم.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "restaurant_id": { "type": "string", "$ref": "#/entities/Restaurant/properties/id" },
-        "name": { "type": "string", "description": "اسم الفرع (على سبيل المثال، 'فرع الرياض - العليا')." },
-        "city": { "type": "string" },
-        "district": { "type": "string" },
-        "address": { "type": "string", "description": "عنوان الشارع الكامل." },
-        "phone": { "type": "string", "description": "رقم هاتف الاتصال بالفرع." },
-        "google_maps_url": { "type": "string", "format": "uri" },
-        "latitude": { "type": "number", "description": "إحداثي خط العرض للفرع." },
-        "longitude": { "type": "number", "description": "إحداثي خط الطول للفرع." },
-        "status": { "type": "string", "enum": ["active", "inactive"], "default": "active" }
-      },
-      "required": ["restaurant_id", "name", "city", "address", "status"]
-    },
     "MenuItem": {
       "title": "عنصر القائمة",
       "description": "عنصر واحد في قائمة طعام المطعم.",
@@ -270,7 +251,6 @@
     "profiles/{profileId}": { "schema": { "$ref": "#/entities/Profile" }, "description": "بيانات حساب المستخدم." },
     "profiles/{profileId}/subscriptions/{subscriptionId}": { "schema": { "$ref": "#/entities/Subscription" }, "description": "اشتراكات المستخدمين." },
     "restaurants/{restaurantId}": { "schema": { "$ref": "#/entities/Restaurant" }, "description": "بيانات مطعم معين." },
-    "restaurants/{restaurantId}/branches/{branchId}": { "schema": { "$ref": "#/entities/Branch" }, "description": "فروع المطاعم." },
     "restaurants/{restaurantId}/menu_items/{menuItemId}": { "schema": { "$ref": "#/entities/MenuItem" }, "description": "أصناف المنيو." },
     "support_tickets/{ticketId}": { "schema": { "$ref": "#/entities/SupportTicket" }, "description": "تذاكر دعم العملاء." },
     "applications/{appId}": { "schema": { "$ref": "#/entities/Application" }, "description": "قائمة التطبيقات العالمية." }
