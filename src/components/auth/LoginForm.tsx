@@ -20,7 +20,13 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  serverTimestamp,
+  writeBatch,
+} from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { Profile } from '@/lib/types';
 
@@ -68,13 +74,103 @@ export function LoginForm() {
         const user = userCredential.user;
 
         const profileDocRef = doc(db, "profiles", user.uid);
-        const profileDoc = await getDoc(profileDocRef);
+        let profileDoc = await getDoc(profileDocRef);
 
+        // إذا كان الحساب موجود في Firebase Auth لكن ما عنده ملف profile
+        // نقوم بإنشاء ملف أساسي تلقائياً مع مطعم افتراضي لصاحب المشروع
         if (!profileDoc.exists()) {
-            if (values.email === DEMO_EMAIL) {
+            const isDemo = values.email === DEMO_EMAIL;
+            const isSuperAdmin = values.email === SUPER_ADMIN_EMAIL;
+
+            if (isDemo) {
                 throw new Error("الحساب التجريبي غير موجود. يرجى الذهاب لصفحة التسجيل أولاً لإنشاء الحساب.");
             }
-            throw new Error("لم يتم العثور على ملف شخصي مطابق. الرجاء التواصل مع الدعم.");
+
+            const batch = writeBatch(db);
+            let restaurantId: string | null = null;
+
+            if (!isSuperAdmin) {
+                const restaurantRef = doc(collection(db, "restaurants"));
+                restaurantId = restaurantRef.id;
+
+                const emailPrefix = values.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+                const randomSuffix = Math.floor(100 + Math.random() * 900);
+                const uniqueUsername = `${emailPrefix || 'restaurant'}-${randomSuffix}`;
+
+                batch.set(restaurantRef, {
+                    id: restaurantId,
+                    owner_id: user.uid,
+                    name: "مشروعي",
+                    username: uniqueUsername,
+                    description: "مطعم أو مقهى جديد – يمكنك تعديل الاسم والوصف من لوحة التحكم.",
+                    logo: null,
+                    primaryColor: '#6366F1',
+                    secondaryColor: '#F3F4F6',
+                    buttonTextColor: '#FFFFFF',
+                    borderRadius: 12,
+                    fontFamily: 'Cairo',
+                    socialLinks: null,
+                    deliveryApps: null,
+                    aiConfig: null,
+                    created_at: serverTimestamp(),
+                    is_paid_plan: false,
+                });
+
+                const subscriptionRef = doc(collection(db, "profiles", user.uid, "subscriptions"));
+                const startDate = new Date();
+                const endDate = new Date();
+                endDate.setFullYear(startDate.getFullYear() + 100);
+
+                batch.set(subscriptionRef, {
+                    id: subscriptionRef.id,
+                    profile_id: user.uid,
+                    plan_id: 'free',
+                    plan_name: 'الباقة المجانية',
+                    status: 'active',
+                    start_date: startDate,
+                    end_date: endDate,
+                });
+
+                const activityRestaurantRef = doc(collection(db, "activity"));
+                batch.set(activityRestaurantRef, {
+                    type: "restaurant_created",
+                    restaurantId,
+                    restaurantName: "مشروعي",
+                    userId: user.uid,
+                    timestamp: serverTimestamp(),
+                });
+
+                const activitySubRef = doc(collection(db, "activity"));
+                batch.set(activitySubRef, {
+                    type: "subscription_started",
+                    restaurantId,
+                    userId: user.uid,
+                    planName: "الباقة المجانية",
+                    restaurantName: "مشروعي",
+                    timestamp: serverTimestamp(),
+                });
+            }
+
+            const profileData: any = {
+                id: user.uid,
+                full_name: user.displayName || values.email.split('@')[0] || 'مستخدم جديد',
+                email: values.email,
+                phone_number: null,
+                role: isSuperAdmin ? ('admin' as const) : ('owner' as const),
+                account_status: 'active' as const,
+                created_at: serverTimestamp(),
+                restaurant_name: isSuperAdmin ? null : "مشروعي",
+                restaurant_id: restaurantId,
+            };
+
+            if (isSuperAdmin) {
+                profileData.admin_permissions = ['dashboard', 'management', 'financials', 'store-management', 'applications', 'announcements', 'support', 'team', 'workflow'];
+            }
+
+            batch.set(profileDocRef, profileData);
+            await batch.commit();
+
+            profileDoc = await getDoc(profileDocRef);
         }
         
         const userProfile = profileDoc.data() as Profile;
