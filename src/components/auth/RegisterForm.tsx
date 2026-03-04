@@ -22,8 +22,6 @@ import { Eye, EyeOff } from 'lucide-react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, collection, writeBatch } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { useLanguage } from '@/components/shared/LanguageContext';
-
 const ADMIN_EMAIL = 'ahmedsupsa@gmail.com';
 const DEMO_EMAIL = 'demo@mershhah.com';
 const DEMO_PASSWORD = 'demo123';
@@ -40,35 +38,25 @@ const allAdminPermissions = [
   'workflow',
 ];
 
-const createFormSchema = (isRTL: boolean) => z.object({
-  fullName: z.string().min(2, { 
-    message: isRTL ? 'الاسم الكامل لازم يكون حرفين عالأقل.' : 'Full name must be at least 2 characters.' 
-  }),
+const formSchema = z.object({
+  fullName: z.string().min(2, { message: 'الاسم الكامل لازم يكون حرفين عالأقل.' }),
   restaurantName: z.string().optional(),
   phoneNumber: z.string().optional(),
-  email: z.string().email({ 
-    message: isRTL ? 'الرجاء إدخال إيميل صحيح.' : 'Please enter a valid email.' 
-  }),
-  password: z.string().min(6, { 
-    message: isRTL ? 'كلمة المرور لازم تكون 6 أحرف عالأقل.' : 'Password must be at least 6 characters.' 
-  }),
+  email: z.string().email({ message: 'الرجاء إدخال إيميل صحيح.' }),
+  password: z.string().min(6, { message: 'كلمة المرور لازم تكون 6 أحرف عالأقل.' }),
 }).superRefine((data, ctx) => {
     if (data.email !== ADMIN_EMAIL) {
         if (!data.restaurantName || data.restaurantName.length < 2) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: isRTL 
-                  ? "اسم مشروعك التجاري لازم يكون حرفين عالأقل."
-                  : "Business name must be at least 2 characters.",
+                message: "اسم مشروعك التجاري لازم يكون حرفين عالأقل.",
                 path: ['restaurantName'],
             });
         }
         if (!data.phoneNumber || data.phoneNumber.length < 9) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: isRTL 
-                  ? "الرجاء إدخال رقم جوال صحيح."
-                  : "Please enter a valid phone number.",
+                message: "الرجاء إدخال رقم جوال صحيح.",
                 path: ['phoneNumber'],
             });
         }
@@ -79,12 +67,8 @@ const createFormSchema = (isRTL: boolean) => z.object({
 export function RegisterForm() {
   const { toast } = useToast();
   const router = useRouter();
-  const { locale } = useLanguage();
-  const isRTL = locale === 'ar';
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  const formSchema = createFormSchema(isRTL);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -233,10 +217,8 @@ export function RegisterForm() {
         await batch.commit();
 
         toast({
-            title: isRTL ? "تم التسجيل بنجاح!" : "Registration successful!",
-            description: isAdmin 
-              ? (isRTL ? "أهلاً بك أيها المدير." : "Welcome, Admin.") 
-              : (isRTL ? "أهلاً بك! تم تفعيل الباقة المجانية لحسابك." : "Welcome! Your free plan has been activated."),
+            title: "تم التسجيل بنجاح!",
+            description: isAdmin ? "أهلاً بك أيها المدير." : "أهلاً بك! تم تفعيل الباقة المجانية لحسابك.",
         });
         
         if (isAdmin) {
@@ -247,13 +229,13 @@ export function RegisterForm() {
         router.refresh();
 
     } catch (error: any) {
-      let description = isRTL ? "حدث خطأ غير متوقع." : "An unexpected error occurred.";
+      let description = "حدث خطأ غير متوقع.";
       if (error.code === 'auth/email-already-in-use') {
-        description = isRTL ? 'هذا البريد الإلكتروني مسجل مسبقًا.' : 'This email is already registered.';
+        description = 'هذا البريد الإلكتروني مسجل مسبقًا.';
       }
       toast({
         variant: "destructive",
-        title: isRTL ? "خطأ في إنشاء الحساب" : "Account Creation Error",
+        title: "خطأ في إنشاء الحساب",
         description: description,
       });
     } finally {
@@ -269,10 +251,10 @@ export function RegisterForm() {
           name='fullName'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{isRTL ? 'الاسم الكامل' : 'Full Name'}</FormLabel>
+              <FormLabel>الاسم الكامل</FormLabel>
               <FormControl>
                 <Input
-                  placeholder={isRTL ? 'مثال: خالد الأحمد' : 'e.g. Khalid Al-Ahmad'}
+                  placeholder="مثال: خالد الأحمد"
                   {...field}
                   disabled={isLoading}
                 />
@@ -286,11 +268,11 @@ export function RegisterForm() {
           name='email'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{isRTL ? 'الإيميل' : 'Email'}</FormLabel>
+              <FormLabel>الإيميل</FormLabel>
               <FormControl>
                 <Input
                   type='email'
-                  placeholder='name@example.com'
+                  placeholder='بريدك@example.com'
                   {...field}
                   disabled={isLoading}
                 />
@@ -307,11 +289,11 @@ export function RegisterForm() {
                 render={({ field }) => (
                     <FormItem>
                     <FormLabel>
-                      {isRTL ? 'اسم مشروعك التجاري (مطعم/مقهى)' : 'Business Name (Restaurant/Cafe)'}
+                      اسم مشروعك التجاري (مطعم/مقهى)
                     </FormLabel>
                     <FormControl>
                         <Input
-                        placeholder={isRTL ? 'مشروعي' : 'My Business'}
+                        placeholder="مشروعي"
                         {...field}
                         disabled={isLoading}
                         />
@@ -325,10 +307,10 @@ export function RegisterForm() {
                 name='phoneNumber'
                 render={({ field }) => (
                     <FormItem>
-                    <FormLabel>{isRTL ? 'رقم الجوال' : 'Phone Number'}</FormLabel>
+                    <FormLabel>رقم الجوال</FormLabel>
                     <FormControl>
                         <Input
-                        placeholder={isRTL ? '05xxxxxxxx' : '+966 5xx xxx xxx'}
+                        placeholder="05xxxxxxxx"
                         {...field}
                         disabled={isLoading}
                         />
@@ -344,7 +326,7 @@ export function RegisterForm() {
           name='password'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{isRTL ? 'كلمة المرور' : 'Password'}</FormLabel>
+              <FormLabel>كلمة المرور</FormLabel>
               <FormControl>
                 <div className='relative'>
                     <Input
@@ -357,14 +339,13 @@ export function RegisterForm() {
                         type='button'
                         variant='ghost'
                         size='icon'
-                        className={`absolute top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground ${isRTL ? 'left-2' : 'right-2'}`}
+                        className="absolute top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground left-2"
                         onClick={() => setShowPassword(prev => !prev)}
                     >
                         {showPassword ? <EyeOff /> : <Eye />}
                         <span className='sr-only'>
                           {showPassword 
-                            ? (isRTL ? 'إخفاء' : 'Hide') 
-                            : (isRTL ? 'إظهار' : 'Show')} {isRTL ? 'كلمة المرور' : 'password'}
+? 'إخفاء' : 'إظهار'} كلمة المرور
                         </span>
                     </Button>
                 </div>
@@ -375,13 +356,12 @@ export function RegisterForm() {
         />
         <Button type='submit' className='w-full !mt-6' disabled={isLoading}>
           {isLoading 
-            ? (isRTL ? 'لحظات...' : 'Loading...') 
-            : (isRTL ? 'إنشاء حساب' : 'Create Account')}
+? 'لحظات...' : 'إنشاء حساب'}
         </Button>
         <div className='text-center text-sm text-muted-foreground pt-4'>
-          {isRTL ? 'عندك حساب?' : 'Already have an account?'}{" "}
+          عندك حساب؟{" "}
           <Link href='/login' className='text-primary hover:underline font-semibold'>
-            {isRTL ? 'سجل دخول' : 'Login'}
+            سجل دخول
           </Link>
         </div>
       </form>

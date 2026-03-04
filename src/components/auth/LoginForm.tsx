@@ -29,20 +29,10 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { Profile } from '@/lib/types';
-import { useLanguage } from '@/components/shared/LanguageContext';
 
-
-const createFormSchema = (isRTL: boolean) => z.object({
-  email: z.string().email({ 
-    message: isRTL ? 'الرجاء إدخال إيميل صحيح.' : 'Please enter a valid email.' 
-  }),
-  password: z
-    .string()
-    .min(6, { 
-      message: isRTL 
-        ? 'كلمة المرور لازم تكون 6 أحرف عالأقل.' 
-        : 'Password must be at least 6 characters.' 
-    }),
+const formSchema = z.object({
+  email: z.string().email({ message: 'الرجاء إدخال إيميل صحيح.' }),
+  password: z.string().min(6, { message: 'كلمة المرور لازم تكون 6 أحرف عالأقل.' }),
 });
 
 const adminPages = [
@@ -63,12 +53,8 @@ const DEMO_EMAIL = 'demo@mershhah.com';
 export function LoginForm() {
   const { toast } = useToast();
   const router = useRouter();
-  const { locale } = useLanguage();
-  const isRTL = locale === 'ar';
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
-  const formSchema = createFormSchema(isRTL);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -188,8 +174,8 @@ export function LoginForm() {
 
         if (userProfile.role === 'admin') {
             toast({ 
-              title: isRTL ? 'أهلاً بك أيها المدير!' : 'Welcome, Admin!', 
-              description: isRTL ? 'يجري توجيهك الآن...' : 'Redirecting you now...'
+              title: 'أهلاً بك أيها المدير!', 
+              description: 'يجري توجيهك الآن...'
             });
             
             let redirectPath = '/admin/dashboard'; // Default path for super admin or fallback
@@ -204,25 +190,23 @@ export function LoginForm() {
             router.push(redirectPath);
         } else if (userProfile.role === 'owner') {
             toast({ 
-              title: isRTL ? 'تم تسجيل الدخول بنجاح' : 'Login successful', 
-              description: isRTL ? 'حيّاك الله! سيتم توجيهك الآن.' : 'Welcome! Redirecting you now.'
+              title: 'تم تسجيل الدخول بنجاح', 
+              description: 'حيّاك الله! سيتم توجيهك الآن.'
             });
             router.push('/owner/dashboard');
         } else {
-            throw new Error(isRTL ? 'دور المستخدم غير معروف.' : 'Unknown user role.');
+            throw new Error('دور المستخدم غير معروف.');
         }
         router.refresh();
     } catch (error: any) {
-        let description = isRTL 
-          ? 'الإيميل أو كلمة المرور غير صحيحة.' 
-          : 'Invalid email or password.';
+        let description = 'الإيميل أو كلمة المرور غير صحيحة.';
         if (error.message.includes('لم يتم العثور') || error.message.includes('الحساب التجريبي غير موجود')) {
             description = error.message;
         }
 
         toast({
             variant: 'destructive',
-            title: isRTL ? 'خطأ في تسجيل الدخول' : 'Login Error',
+            title: 'خطأ في تسجيل الدخول',
             description,
         });
         await signOut(auth).catch(() => {});
@@ -239,9 +223,9 @@ export function LoginForm() {
           name='email'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{isRTL ? 'الإيميل' : 'Email'}</FormLabel>
+              <FormLabel>الإيميل</FormLabel>
               <FormControl>
-                <Input type='email' placeholder='name@example.com' {...field} disabled={isLoading} />
+                <Input type='email' placeholder='بريدك@example.com' {...field} disabled={isLoading} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -253,9 +237,9 @@ export function LoginForm() {
           render={({ field }) => (
             <FormItem>
               <div className='flex justify-between items-center'>
-                <FormLabel>{isRTL ? 'كلمة المرور' : 'Password'}</FormLabel>
+                <FormLabel>كلمة المرور</FormLabel>
                 <Link href='/forgot-password' className='text-sm text-primary hover:underline'>
-                  {isRTL ? 'نسيت كلمة المرور؟' : 'Forgot password?'}
+                  نسيت كلمة المرور؟
                 </Link>
               </div>
               <FormControl>
@@ -265,7 +249,7 @@ export function LoginForm() {
                     type='button'
                     variant='ghost'
                     size='icon'
-                    className={`absolute top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground ${isRTL ? 'left-2' : 'right-2'}`}
+                    className="absolute top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground left-2"
                     onClick={() => setShowPassword(prev => !prev)}
                   >
                     {showPassword ? <EyeOff /> : <Eye />}
@@ -277,14 +261,12 @@ export function LoginForm() {
           )}
         />
         <Button type='submit' className='w-full !mt-6' disabled={isLoading}>
-          {isLoading 
-            ? (isRTL ? 'لحظات...' : 'Loading...') 
-            : (isRTL ? 'تسجيل الدخول' : 'Login')}
+          {isLoading ? 'لحظات...' : 'تسجيل الدخول'}
         </Button>
         <div className='text-center text-sm text-muted-foreground pt-4'>
-          {isRTL ? 'ما عندك حساب؟' : "Don't have an account?"}{' '}
+          ما عندك حساب؟{' '}
           <Link href='/register' className='text-primary hover:underline font-semibold'>
-            {isRTL ? 'سوّ حساب جديد' : 'Create account'}
+            سوّ حساب جديد
           </Link>
         </div>
       </form>

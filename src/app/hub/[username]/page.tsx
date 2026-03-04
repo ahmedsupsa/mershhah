@@ -274,6 +274,18 @@ export default function RestaurantHubPage() {
                             </div>
                         </Link>
 
+                        {/* الفروع - صفحة مستقلة */}
+                        <Link href={`/branches/${username}`} className="block">
+                            <div className="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all h-[64px]">
+                                <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 shrink-0">
+                                    <MapPin className="h-6 w-6" />
+                                </div>
+                                <div className="flex-1 text-right min-w-0">
+                                    <span className="font-black text-sm text-gray-900 block truncate">الفروع</span>
+                                </div>
+                            </div>
+                        </Link>
+
                         {/* تذكرة دعم */}
                         <Link href={`/support/${username}`} className="block">
                             <div className="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all h-[64px]">

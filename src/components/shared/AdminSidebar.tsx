@@ -26,7 +26,6 @@ import { Logo } from "./Logo";
 import { Separator } from "../ui/separator";
 import Link from "next/link";
 import { LanguageSwitcherSimple } from "./LanguageSwitcher";
-import { useLanguage } from "./LanguageContext";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { useUser } from "@/hooks/useUser";
@@ -40,20 +39,18 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useUser();
-  const { locale } = useLanguage();
-  const isRTL = locale === 'ar';
   const [unreadCount, setUnreadCount] = useState(0);
 
   const menuItems = [
-    { href: "/admin/dashboard", label: isRTL ? "لوحة التحكم" : "Dashboard", icon: LayoutDashboard, permissionId: 'dashboard' },
-    { href: "/admin/management", label: isRTL ? "المشتركين" : "Subscribers", icon: Building, permissionId: 'management' },
-    { href: "/admin/plans", label: isRTL ? "الباقات" : "Plans", icon: Package, permissionId: 'financials' },
-    { href: "/admin/store-management", label: isRTL ? "إدارة المتجر" : "Store Management", icon: Store, permissionId: 'store-management' },
-    { href: "/admin/applications", label: isRTL ? "التطبيقات" : "Applications", icon: AppWindow, permissionId: 'applications' },
-    { href: "/admin/announcements", label: isRTL ? "الإعلانات" : "Announcements", icon: Megaphone, permissionId: 'announcements' },
-    { href: "/admin/support", label: isRTL ? "الدعم المباشر" : "Live Support", icon: MessageSquare, permissionId: 'support' },
-    { href: "/admin/team", label: isRTL ? "الفريق" : "Team", icon: Users, permissionId: 'team' },
-    { href: "/admin/workflow", label: isRTL ? "سير العمل" : "Workflow", icon: Activity, permissionId: 'workflow' },
+    { href: "/admin/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, permissionId: 'dashboard' },
+    { href: "/admin/management", label: "المشتركين", icon: Building, permissionId: 'management' },
+    { href: "/admin/plans", label: "الباقات", icon: Package, permissionId: 'financials' },
+    { href: "/admin/store-management", label: "إدارة المتجر", icon: Store, permissionId: 'store-management' },
+    { href: "/admin/applications", label: "التطبيقات", icon: AppWindow, permissionId: 'applications' },
+    { href: "/admin/announcements", label: "الإعلانات", icon: Megaphone, permissionId: 'announcements' },
+    { href: "/admin/support", label: "الدعم المباشر", icon: MessageSquare, permissionId: 'support' },
+    { href: "/admin/team", label: "الفريق", icon: Users, permissionId: 'team' },
+    { href: "/admin/workflow", label: "سير العمل", icon: Activity, permissionId: 'workflow' },
   ];
 
   useEffect(() => {
@@ -114,7 +111,7 @@ export function AdminSidebar() {
             <SidebarMenuButton asChild>
               <Link href="/admin/settings">
                 <Settings className="h-4 w-4" />
-                {isRTL ? "الإعدادات" : "Settings"}
+                الإعدادات
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -122,7 +119,7 @@ export function AdminSidebar() {
         <Separator className="my-2" />
         <SidebarMenuButton onClick={handleLogout} className="text-destructive hover:text-destructive">
           <LogOut className="h-4 w-4" />
-          {isRTL ? "تسجيل الخروج" : "Logout"}
+          تسجيل الخروج
         </SidebarMenuButton>
         <div className="px-2 py-1 mt-2">
           <LanguageSwitcherSimple />

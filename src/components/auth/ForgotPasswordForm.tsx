@@ -80,7 +80,7 @@ export function ForgotPasswordForm() {
             <FormItem>
               <FormLabel>البريد الإلكتروني المسجل</FormLabel>
               <FormControl>
-                <Input type='email' placeholder='name@example.com' {...field} disabled={isLoading} />
+                <Input type='email' placeholder='بريدك@example.com' {...field} disabled={isLoading} />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -185,7 +185,7 @@ export function EditToolDialog({ children, tool, allTools = [], onSave }: EditTo
               <FormItem><FormLabel>عنوان الأداة</FormLabel><FormControl><Input placeholder="مثال: تحليلات متقدمة" {...field} /></FormControl><FormMessage /></FormItem>
             )}/>
             <FormField control={form.control} name="id" render={({ field }) => (
-              <FormItem><FormLabel>المعرّف البرمجي</FormLabel><FormControl><Input placeholder="my-new-tool" {...field} disabled={isEditing} /></FormControl><FormMessage /><p className="text-xs text-muted-foreground pt-1">هذا هو المعرّف البرمجي للأداة. استخدم حروف إنجليزية صغيرة وأرقام وشرطات فقط. لا يمكن تغييره بعد الإنشاء.</p></FormItem>
+              <FormItem><FormLabel>المعرّف البرمجي</FormLabel><FormControl><Input placeholder="اداة-جديدة" {...field} disabled={isEditing} /></FormControl><FormMessage /><p className="text-xs text-muted-foreground pt-1">المعرّف البرمجي للأداة (حروف وأرقام وشرطات فقط). لا يمكن تغييره بعد الإنشاء.</p></FormItem>
             )}/>
              <FormField
                 control={form.control}

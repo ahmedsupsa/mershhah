@@ -17,6 +17,7 @@ import { db } from "@/lib/firebase";
 import type { MenuItem } from "@/lib/types";
 import { errorEmitter } from "@/lib/firebase/error-emitter";
 import { FirestorePermissionError, type SecurityRuleContext } from "@/lib/firebase/errors";
+import { useLanguage } from "@/components/shared/LanguageContext";
 
 type ItemCategory = 'Star' | 'Plow-Horse' | 'Puzzle' | 'Dog';
 
@@ -25,6 +26,7 @@ export default function MenuPage() {
   const [isRefreshing, startRefresh] = useTransition();
   const [isApplyingSort, startApplyingSort] = useTransition();
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
 
   const [rawMenuItems, setRawMenuItems] = useState<MenuItem[]>([]);
   const [interactions, setInteractions] = useState<any[]>([]);
@@ -144,14 +146,14 @@ export default function MenuPage() {
 
   const handleRefresh = () => {
     startRefresh(() => {
-      toast({ title: "البيانات محدّثة تلقائياً" });
+      toast({ title: t('menu.dataUpdatedAuto') });
     });
   };
 
   const handleApplySmartSort = () => {
     if (!user?.restaurantId || menuItems.length === 0) {
         toast({
-            title: "لا توجد بيانات لتطبيق الترتيب",
+            title: t('menu.noDataForSort'),
             variant: "destructive"
         });
         return;
@@ -171,8 +173,8 @@ export default function MenuPage() {
         try {
             await batch.commit();
             toast({
-                title: "تم تطبيق الترتيب الذكي",
-                description: "تم تحديث ترتيب قائمة الطعام التي تظهر لعملائك.",
+                title: t('menu.smartSortApplied'),
+                description: t('menu.smartSortDesc'),
             });
         } catch (error: any) {
             const permissionError = new FirestorePermissionError({
@@ -201,25 +203,27 @@ export default function MenuPage() {
   };
   const avgPrice = calculateAveragePrice();
 
+  const iconMargin = isRTL ? 'ml-2' : 'mr-2';
+
   return (
     <div className="space-y-8">
       <PageHeader
-        title="إدارة المنيو"
-        description="أضف وعدّل أطباقك. يتم الآن ترتيب القائمة تلقائياً بناءً على أداء كل طبق."
+        title={t('menu.manageMenu')}
+        description={t('menu.manageMenuDesc')}
       >
           <Button variant="outline" onClick={handleApplySmartSort} disabled={isApplyingSort || loadingOrNoUser}>
-              {isApplyingSort ? <Loader2 className="ml-2 h-4 w-4 animate-spin"/> : <Sparkles className="ml-2 h-4 w-4" />}
-              تطبيق الترتيب الذكي
+              {isApplyingSort ? <Loader2 className={`${iconMargin} h-4 w-4 animate-spin`}/> : <Sparkles className={`${iconMargin} h-4 w-4`} />}
+              {t('menu.applySmartSort')}
           </Button>
           <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing || loadingOrNoUser}>
-            <RefreshCw className={`ml-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            تحديث
+            <RefreshCw className={`${iconMargin} h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {t('menu.refresh')}
           </Button>
           
           <ImportMenuDialog restaurantId={user?.restaurantId} onSave={() => {}}>
             <Button variant="outline" disabled={loadingOrNoUser || !user}>
-                <Sparkles className="ml-2 h-4 w-4" />
-                استيراد من صورة
+                <Sparkles className={`${iconMargin} h-4 w-4`} />
+                {t('menu.importFromImage')}
             </Button>
           </ImportMenuDialog>
 
@@ -231,8 +235,8 @@ export default function MenuPage() {
             menuItems={rawMenuItems}
           >
             <Button disabled={loadingOrNoUser || !user}>
-              <PlusCircle className="ml-2 h-4 w-4" />
-              إضافة طبق جديد
+              <PlusCircle className={`${iconMargin} h-4 w-4`} />
+              {t('menu.addNewItem')}
             </Button>
           </EditMenuItemDialog>
       </PageHeader>
@@ -246,9 +250,24 @@ export default function MenuPage() {
           </>
         ) : (
           <>
-            <StatCard title="الطبق الأكثر شعبية (مثال)" value={popularItem?.name || "لا يوجد"} icon={Flame} change="بناءً على تفاعل العملاء" />
-            <StatCard title="إجمالي الأصناف" value={totalItems.toString()} icon={Utensils} change={`${availableItems} صنف متاح حالياً`} />
-            <StatCard title="متوسط سعر الطبق" value={`${avgPrice.toFixed(2)} ر.س`} icon={DollarSign} change="لكل الأصناف المتاحة" />
+            <StatCard 
+              title={t('menu.mostPopularItem')} 
+              value={popularItem?.name || t('menu.noItem')} 
+              icon={Flame} 
+              change={t('menu.basedOnInteraction')} 
+            />
+            <StatCard 
+              title={t('menu.totalItems')} 
+              value={totalItems.toString()} 
+              icon={Utensils} 
+              change={`${availableItems} ${t('menu.itemsAvailable')}`} 
+            />
+            <StatCard 
+              title={t('menu.avgPrice')} 
+              value={`${avgPrice.toFixed(2)} ${t('menu.sar')}`} 
+              icon={DollarSign} 
+              change={t('menu.forAllAvailable')} 
+            />
           </>
         )}
       </div>

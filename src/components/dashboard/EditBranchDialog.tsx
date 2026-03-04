@@ -38,16 +38,11 @@ import type { Branch } from '@/lib/types';
 
 const schema = z.object({
   name: z.string().min(2, 'اسم الفرع مطلوب'),
-  name_en: z.string().optional(),
   city: z.string().min(2, 'اختر المدينة'),
-  city_en: z.string().optional(),
   district: z.string().min(2, 'اختر الحي'),
-  district_en: z.string().optional(),
   address: z.string().min(5, 'العنوان مطلوب'),
-  address_en: z.string().optional(),
   phone: z.string().optional(),
   opening_hours: z.string().max(200).optional(),
-  opening_hours_en: z.string().max(200).optional(),
   status: z.enum(['active', 'inactive']),
 });
 
@@ -82,16 +77,11 @@ export function EditBranchDialog({
     resolver: zodResolver(schema),
     defaultValues: {
       name: '',
-      name_en: '',
       city: '',
-      city_en: '',
       district: '',
-      district_en: '',
       address: '',
-      address_en: '',
       phone: '',
       opening_hours: '',
-      opening_hours_en: '',
       status: 'active',
     },
   });
@@ -104,16 +94,11 @@ export function EditBranchDialog({
     if (branch) {
       form.reset({
         name: branch.name,
-        name_en: branch.name_en ?? '',
         city: branch.city,
-        city_en: branch.city_en ?? '',
         district: branch.district,
-        district_en: branch.district_en ?? '',
         address: branch.address,
-        address_en: branch.address_en ?? '',
         phone: branch.phone ?? '',
         opening_hours: branch.opening_hours ?? '',
-        opening_hours_en: branch.opening_hours_en ?? '',
         status: branch.status ?? 'active',
       });
       setAllDaysOpen('');
@@ -123,16 +108,11 @@ export function EditBranchDialog({
     } else {
       form.reset({
         name: '',
-        name_en: '',
         city: '',
-        city_en: '',
         district: '',
-        district_en: '',
         address: '',
-        address_en: '',
         phone: '',
         opening_hours: '',
-        opening_hours_en: '',
         status: 'active',
       });
       setAllDaysOpen('');
@@ -158,13 +138,8 @@ export function EditBranchDialog({
         status: values.status,
         restaurant_id: restaurantId,
       };
-      if (values.name_en?.trim()) data.name_en = values.name_en.trim();
-      if (values.city_en?.trim()) data.city_en = values.city_en.trim();
-      if (values.district_en?.trim()) data.district_en = values.district_en.trim();
-      if (values.address_en?.trim()) data.address_en = values.address_en.trim();
       if (values.phone?.trim()) data.phone = values.phone.trim();
       if (values.opening_hours?.trim()) data.opening_hours = values.opening_hours.trim();
-      if (values.opening_hours_en?.trim()) data.opening_hours_en = values.opening_hours_en.trim();
 
       const ref = collection(db, 'restaurants', restaurantId, 'branches');
       if (isEdit && branch?.id) {
@@ -203,19 +178,6 @@ export function EditBranchDialog({
                   <FormLabel>اسم الفرع</FormLabel>
                   <FormControl>
                     <Input placeholder="مثال: فرع العليا" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="name_en"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Branch Name (English - Optional)</FormLabel>
-                  <FormControl>
-                    <Input dir="ltr" placeholder="e.g. Olaya Branch" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -283,19 +245,6 @@ export function EditBranchDialog({
                   <FormLabel>العنوان</FormLabel>
                   <FormControl>
                     <Input placeholder="الشارع والحي..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="address_en"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address (English - Optional)</FormLabel>
-                  <FormControl>
-                    <Input dir="ltr" placeholder="Street and district..." {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -457,7 +406,7 @@ export function EditBranchDialog({
                 إلغاء
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {saving ? 'جاري الحفظ...' : isEdit ? 'حفظ' : 'إضافة'}
               </Button>
             </div>

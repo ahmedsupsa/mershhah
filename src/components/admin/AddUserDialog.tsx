@@ -104,7 +104,7 @@ export function AddUserDialog({ children, onUserAdded }: AddUserDialogProps) {
                                     <FormControl>
                                         <Input
                                         type="email"
-                                        placeholder="name@example.com"
+                                        placeholder="بريد@example.com"
                                         {...field}
                                         disabled={isPending}
                                         />

@@ -26,9 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
 import { cn } from "@/lib/utils";
 import { MenuItem } from "@/lib/types";
-import { useUser } from "@/hooks/useUser";
 import Link from 'next/link';
-
 const sizeSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "اسم الحجم مطلوب"),
@@ -39,12 +37,9 @@ const sizeSchema = z.object({
 
 const formSchema = z.object({
   name: z.string().min(2, "الاسم مطلوب"),
-  name_en: z.string().optional(),
   description: z.string().min(10, "الوصف يجب أن يكون 10 أحرف على الأقل"),
-  description_en: z.string().optional(),
   image_url: z.string().optional().or(z.literal("")),
   category: z.string().min(2, "اسم الصنف مطلوب"),
-  category_en: z.string().optional(),
   sizes: z.array(sizeSchema).min(1, "يجب إضافة حجم واحد على الأقل."),
   status: z.enum(['available', 'unavailable']).default('available'),
 });
@@ -72,7 +67,6 @@ const isToday = (someDate?: Date) => {
 };
 
 export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, restaurantId, userId, itemCount = 0 }: EditMenuItemDialogProps) {
-  const { user } = useUser();
   const [open, setOpen] = useState(false);
   const [isSaving, startSaving] = useTransition();
   const [isGeneratingDesc, startGeneratingDesc] = useTransition();
@@ -90,6 +84,9 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
   });
+
+  const iconMargin = 'ml-2';
+  const dir = 'rtl';
   
   const uniqueCategories = useMemo(() => {
     if (!menuItems) return [];
@@ -104,19 +101,16 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
         : defaultSizes;
 
       form.reset(isEditing ? {
-        ...menuItem,
-        name_en: menuItem.name_en || "",
-        description_en: menuItem.description_en || "",
-        category_en: menuItem.category_en || "",
+        name: menuItem.name,
+        description: menuItem.description || "",
+        category: menuItem.category || "",
         image_url: menuItem.image_url || "",
-        sizes: sizes
+        sizes: sizes,
+        status: menuItem.status || 'available',
       } : {
         name: "",
-        name_en: "",
         description: "",
-        description_en: "",
         category: "",
-        category_en: "",
         image_url: "",
         sizes: defaultSizes,
         status: 'available',
@@ -137,7 +131,11 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.size > 4 * 1024 * 1024) {
-        toast({ title: "حجم الصورة كبير", description: "الرجاء اختيار صورة أقل من 4 ميجابايت.", variant: "destructive" });
+        toast({ 
+          title: "حجم الصورة كبير", 
+          description: "الرجاء اختيار صورة أقل من 4 ميجابايت.", 
+          variant: "destructive" 
+        });
         return;
       }
       setImageFile(file);
@@ -158,7 +156,11 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
         if (itemSnap.exists()) {
             const lastGen = itemSnap.data().description_last_generated_at?.toDate();
             if (isToday(lastGen)) {
-                toast({ title: "لقد وصلت للحد اليومي", description: "يمكنك إنشاء وصف واحد لهذا الطبق كل يوم.", variant: "destructive" });
+                toast({ 
+                  title: "لقد وصلت للحد اليومي", 
+                  description: "يمكنك إنشاء وصف واحد لهذا الطبق كل يوم.", 
+                  variant: "destructive" 
+                });
                 return;
             }
         }
@@ -183,7 +185,11 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
 
   async function onSubmit(values: FormValues) {
     if (!restaurantId || !userId) {
-        toast({ variant: "destructive", title: "خطأ", description: "بيانات المستخدم أو المطعم مفقودة." });
+        toast({ 
+          variant: "destructive", 
+          title: "خطأ", 
+          description: "بيانات المستخدم أو المطعم مفقودة." 
+        });
         return;
     }
     startSaving(async () => {
@@ -222,7 +228,9 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
                 });
             }
 
-            toast({ title: `تم ${isEditing ? 'تعديل' : 'إضافة'} الطبق بنجاح` });
+            const successMsg = isEditing 
+              ? 'تم تعديل الطبق بنجاح' : 'تم إضافة الطبق بنجاح';
+            toast({ title: successMsg });
             onSave?.();
             setOpen(false);
         } catch (error: any) {
@@ -237,11 +245,15 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent dir={dir} className="sm:max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'تعديل طبق' : 'إضافة طبق جديد'}</DialogTitle>
+          <DialogTitle>
+            {isEditing 
+? 'تعديل طبق' : 'إضافة طبق جديد'}
+          </DialogTitle>
           <DialogDescription>
-            {isEditing ? 'قم بتعديل تفاصيل الطبق أدناه.' : 'أدخل تفاصيل الطبق الجديد ليظهر في قائمة الطعام.'}
+            {isEditing 
+? 'قم بتعديل تفاصيل الطبق أدناه.' : 'أدخل تفاصيل الطبق الجديد ليظهر في قائمة الطعام.'}
           </DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto pr-6 pl-2 -mr-6">
@@ -250,7 +262,9 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
                 
                 <Accordion type="multiple" defaultValue={['basic', 'details']} className="w-full">
                 <AccordionItem value="basic">
-                    <AccordionTrigger className="text-lg font-bold">المعلومات الأساسية</AccordionTrigger>
+                    <AccordionTrigger className="text-lg font-bold">
+                      المعلومات الأساسية
+                    </AccordionTrigger>
                     <AccordionContent className="pt-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="md:col-span-2 space-y-4">
@@ -261,17 +275,6 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
                                         <FormItem>
                                         <FormLabel>اسم الطبق</FormLabel>
                                         <FormControl><Input placeholder="مثال: كباب لحم" {...field} disabled={isActionPending} /></FormControl>
-                                        <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="name_en"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                        <FormLabel>Item Name (English - Optional)</FormLabel>
-                                        <FormControl><Input dir="ltr" placeholder="e.g. Lamb Kebab" {...field} disabled={isActionPending} /></FormControl>
                                         <FormMessage />
                                         </FormItem>
                                     )}
@@ -289,17 +292,6 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
                                             </Button>
                                         </div>
                                         <FormControl><Textarea placeholder="وصف جذاب للطبق..." {...field} disabled={isActionPending} rows={3} /></FormControl>
-                                        <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="description_en"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                        <FormLabel>Description (English - Optional)</FormLabel>
-                                        <FormControl><Textarea dir="ltr" placeholder="An appetizing description of the dish..." {...field} disabled={isActionPending} rows={2} /></FormControl>
                                         <FormMessage />
                                         </FormItem>
                                     )}
@@ -380,19 +372,23 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
                                     ) : (
                                         <div className="text-center p-4">
                                             <UploadCloud className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                                            <p className="text-xs text-muted-foreground font-medium">ارفع صورة</p>
+                                            <p className="text-xs text-muted-foreground font-medium">{isRTL ? 'ارفع صورة' : 'Upload image'}</p>
                                         </div>
                                     )}
                                 </div>
                                 <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
-                                <p className="text-[10px] text-muted-foreground text-center">يفضل صور مربعة، بحد أقصى 4 ميجابايت.</p>
+                                <p className="text-[10px] text-muted-foreground text-center">
+                                  يفضل صور مربعة، بحد أقصى 4 ميجابايت.
+                                </p>
                             </div>
                         </div>
                     </AccordionContent>
                 </AccordionItem>
 
                 <AccordionItem value="details">
-                    <AccordionTrigger className="text-lg font-bold">الأسعار والتكلفة</AccordionTrigger>
+                    <AccordionTrigger className="text-lg font-bold">
+                      الأسعار والتكلفة
+                    </AccordionTrigger>
                     <AccordionContent className="pt-4">
                         <div className="border rounded-lg overflow-x-auto">
                             <Table>
@@ -433,13 +429,15 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
                             </Table>
                         </div>
                         <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => append({ id: `size-${Date.now()}`, name: '', price: 0, cost: 0 })}>
-                            <PlusCircle className="ml-2 h-4 w-4" /> إضافة حجم
+                            <PlusCircle className={`${iconMargin} h-4 w-4`} /> إضافة حجم
                         </Button>
                     </AccordionContent>
                 </AccordionItem>
 
                 <AccordionItem value="status">
-                    <AccordionTrigger className="text-lg font-bold">الحالة</AccordionTrigger>
+                    <AccordionTrigger className="text-lg font-bold">
+                      الحالة
+                    </AccordionTrigger>
                     <AccordionContent className="pt-4">
                         <FormField
                             control={form.control}
@@ -467,9 +465,11 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
 
                 <DialogFooter className="pt-4 sticky bottom-0 bg-background py-2 border-t">
                   <div className="flex gap-2 w-full justify-end">
-                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>إلغاء</Button>
+                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                      إلغاء
+                    </Button>
                     <Button type="submit" disabled={isActionPending}>
-                        {isSaving ? <Loader2 className="animate-spin ml-2 h-4 w-4" /> : null}
+                        {isSaving ? <Loader2 className={`animate-spin ${iconMargin} h-4 w-4`} /> : null}
                         حفظ الطبق
                     </Button>
                   </div>

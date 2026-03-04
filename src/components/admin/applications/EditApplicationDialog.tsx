@@ -125,7 +125,7 @@ export function EditApplicationDialog({ children, application, onSave }: EditApp
                         <FormItem><FormLabel>اسم التطبيق</FormLabel><FormControl><Input placeholder="مثال: جاهز" {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="platform_id" render={({ field }) => (
-                        <FormItem><FormLabel>المعرّف (Platform ID)</FormLabel><FormControl><Input placeholder="jahez" {...field} disabled={isEditing} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>المعرّف</FormLabel><FormControl><Input placeholder="jahez" {...field} disabled={isEditing} /></FormControl><FormMessage /></FormItem>
                     )}/>
                 </div>
                 <div className="space-y-2">

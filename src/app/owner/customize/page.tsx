@@ -357,7 +357,7 @@ export default function CustomizePage() {
                                 dir="ltr"
                                 value={settings.username ?? ''}
                                 onChange={e => setSettings({ ...settings, username: e.target.value })}
-                                placeholder="my-restaurant"
+                                placeholder="اسم-المطعم"
                                 className="text-right font-mono text-sm"
                                 disabled={(() => {
                                     const lastUpdated = settings.username_last_updated_at;
@@ -489,7 +489,7 @@ export default function CustomizePage() {
                                         <div className="p-2 bg-white rounded-md border shrink-0">
                                             <Icon size={16} style={{ color: platform?.color }} />
                                         </div>
-                                        <Input dir="ltr" value={link.value} onChange={e => updateSocialLink(link.id, e.target.value)} placeholder="URL..." className="h-9 text-xs" />
+                                        <Input dir="ltr" value={link.value} onChange={e => updateSocialLink(link.id, e.target.value)} placeholder="الرابط..." className="h-9 text-xs" />
                                         <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive" onClick={() => removeSocialLink(link.id)}><X size={14}/></Button>
                                     </div>
                                 )
