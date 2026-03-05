@@ -14,7 +14,7 @@ export default function BlogPage() {
   const sortedPosts = [...posts].sort((a, b) => new Date(b.metadata.publishedAt).getTime() - new Date(a.metadata.publishedAt).getTime());
 
   return (
-    <div className="space-y-16 max-w-7xl mx-auto px-4 sm:px-6">
+    <div className="space-y-16 max-w-7xl mx-auto px-4 sm:px-6" dir="rtl">
         <BlogHeader 
             title="مدونة النمو الرقمي"
             description="دليلك المتكامل لبناء مشروع تجاري ناجح ومستدام في قطاع الأغذية والمشروبات السعودي."

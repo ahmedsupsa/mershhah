@@ -30,6 +30,7 @@ import {
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { db, storage, auth } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, setDoc } from 'firebase/firestore';
+import { syncPublicPage } from '@/lib/public-pages';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { StorageImage } from '@/components/shared/StorageImage';
 import { InstagramIcon, XIcon, TikTokIcon, SnapchatIcon, YoutubeIcon, FacebookIcon, WhatsAppIcon, WebsiteIcon } from '@/components/shared/SocialIcons';
@@ -212,6 +213,8 @@ export default function CustomizePage() {
         Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
 
         await updateDoc(restaurantRef, updateData);
+
+        syncPublicPage(user.restaurantId!).catch(() => {});
 
         if (logoFile) {
           const activityRef = doc(collection(db, "activity"));

@@ -57,7 +57,7 @@ export function PostCard({ post }: { post: any }) {
                     className="flex items-center gap-2 text-sm font-black text-primary hover:gap-4 transition-all group"
                 >
                     <span>اقرأ الأطروحة الكاملة</span>
-                    <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+                    <ArrowLeft className="h-4 w-4 rotate-180 transition-transform group-hover:translate-x-1" aria-hidden />
                 </Link>
             </CardFooter>
         </Card>

@@ -3,16 +3,12 @@
 import { useState, useEffect } from 'react';
 import { Logo } from "@/components/shared/Logo";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { ArrowLeft, Target, Eye, Handshake, Sparkles } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { PublicFooter } from "@/components/shared/PublicFooter";
-
-const teamMembers = [
-  { name: 'أحمد الحربي', role: 'مطور الأعمال' },
-];
 
 const values = [
     {
@@ -141,32 +137,6 @@ export default function AboutPage() {
              </Button>
         </section>
 
-        {/* Team — في الأسفل، بدون صورة */}
-        <section className="py-16 bg-muted/30 rounded-3xl">
-          <div className="container mx-auto px-4">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold font-headline">صاحب المشروع</h2>
-            </div>
-            <div className="flex flex-wrap justify-center gap-6 max-w-md mx-auto">
-              {teamMembers.map((member, index) => (
-                 <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4 }}
-                 >
-                    <Card className="text-center p-6 border shadow-sm">
-                      <CardContent className="p-0">
-                        <h3 className="text-lg font-bold">{member.name}</h3>
-                        <p className="text-primary text-sm font-medium mt-1">{member.role}</p>
-                      </CardContent>
-                    </Card>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
       </div>
       <PublicFooter />
     </div>

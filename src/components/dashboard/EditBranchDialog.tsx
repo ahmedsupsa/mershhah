@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { syncPublicPage } from '@/lib/public-pages';
 import saGeodata from '@/data/sa-geodata.json';
 import {
   Select,
@@ -149,6 +150,7 @@ export function EditBranchDialog({
         await addDoc(ref, data);
         toast({ title: 'تمت إضافة الفرع' });
       }
+      syncPublicPage(restaurantId).catch(() => {});
       onSaved?.();
       onOpenChange(false);
     } catch (e: unknown) {

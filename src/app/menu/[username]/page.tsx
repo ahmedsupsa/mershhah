@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
 import { collection, doc, query, where, limit, onSnapshot, updateDoc, increment, addDoc, serverTimestamp } from 'firebase/firestore';
+import { getPublicPage } from '@/lib/public-pages';
 import { StorageImage } from '@/components/shared/StorageImage';
 import type { MenuItem } from '@/lib/types';
 import { Input } from '@/components/ui/input';
@@ -27,14 +28,57 @@ export default function PublicMenuPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [activeItem, setActiveItem] = useState<MenuItem | null>(null);
+  const unsubRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!username) return;
 
     setLoading(true);
-    const restQuery = query(collection(db, "restaurants"), where("username", "==", username), limit(1));
-    
-    const unsubscribe = onSnapshot(restQuery, (restSnapshot) => {
+    let cancelled = false;
+    const applySort = (items: MenuItem[]): MenuItem[] => {
+      const hasPositions = items.some(item => item.position != null);
+      if (hasPositions) return [...items].sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+      type E = MenuItem & { profitMargin: number; popularity: number; classification: 'Star' | 'Plow-Horse' | 'Puzzle' | 'Dog' };
+      const engineered: E[] = items.map((item) => {
+        const size = Array.isArray(item.sizes) && item.sizes[0] ? item.sizes[0] : { price: 0, cost: 0 };
+        const price = typeof size.price === 'number' ? size.price : 0;
+        const cost = typeof size.cost === 'number' ? size.cost : 0;
+        const profitMargin = price > 0 ? ((price - cost) / price) * 100 : 0;
+        const popularity = item.clicks_count ?? 0;
+        return { ...item, profitMargin, popularity, classification: 'Dog' as const };
+      });
+      const margins = engineered.map(i => i.profitMargin).sort((a, b) => a - b);
+      const popularities = engineered.map(i => i.popularity).sort((a, b) => a - b);
+      const medianMargin = margins[Math.floor(margins.length / 2)] ?? 0;
+      const medianPopularity = popularities[Math.floor(popularities.length / 2)] ?? 0;
+      const classificationOrder: Record<string, number> = { Star: 1, Puzzle: 2, 'Plow-Horse': 3, Dog: 4 };
+      engineered.forEach((item) => {
+        const highProfit = item.profitMargin >= medianMargin;
+        const highPopularity = item.popularity >= medianPopularity;
+        item.classification = (highProfit && highPopularity) ? 'Star' : (highProfit && !highPopularity) ? 'Puzzle' : (!highProfit && highPopularity) ? 'Plow-Horse' : 'Dog';
+      });
+      return engineered.sort((a, b) => {
+        const o = classificationOrder[a.classification] - classificationOrder[b.classification];
+        if (o !== 0) return o;
+        return (b.popularity ?? 0) - (a.popularity ?? 0);
+      }) as MenuItem[];
+    };
+
+    getPublicPage(username).then((data) => {
+      if (cancelled) return;
+      if (data?.restaurant && Array.isArray(data.menu)) {
+        setRestaurant(data.restaurant);
+        const items = data.menu as MenuItem[];
+        setMenuItems(applySort(items));
+        setCategories(['الكل', ...Array.from(new Set(items.map(i => i.category).filter(Boolean)))]);
+        setLoading(false);
+        return;
+      }
+
+      const restQuery = query(collection(db, "restaurants"), where("username", "==", username), limit(1));
+      let unsubMenu: (() => void) | null = null;
+      const unsubscribe = onSnapshot(restQuery, (restSnapshot) => {
+        if (cancelled) return;
         if (restSnapshot.empty) {
             setRestaurant(null);
             setLoading(false);
@@ -45,76 +89,12 @@ export default function PublicMenuPage() {
             
             const menuQuery = query(collection(db, 'restaurants', restDoc.id, 'menu_items'));
 
-            const unsubMenu = onSnapshot(menuQuery, (menuSnapshot) => {
+            unsubMenu = onSnapshot(menuQuery, (menuSnapshot) => {
+                if (cancelled) return;
                 const items = menuSnapshot.docs.map(doc => ({ ...doc.data() as MenuItem, id: doc.id }));
-
-                // إذا كان هناك ترتيب محفوظ (position) نستخدمه، وإلا نطبّق هندسة المنيو تلقائياً
-                const hasPositions = items.some(item => item.position != null);
-
-                let sortedItems: MenuItem[];
-                if (hasPositions) {
-                    sortedItems = [...items].sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
-                } else {
-                    // هندسة منيو مبسّطة للعرض العام: ربحية + اهتمام (نقرات)
-                    type EngineeredItem = MenuItem & {
-                        profitMargin: number;
-                        popularity: number;
-                        classification: 'Star' | 'Plow-Horse' | 'Puzzle' | 'Dog';
-                    };
-
-                    const engineered: EngineeredItem[] = items.map((item) => {
-                        const size = Array.isArray(item.sizes) && item.sizes[0]
-                          ? item.sizes[0]
-                          : { price: 0, cost: 0 };
-                        const price = typeof size.price === 'number' ? size.price : 0;
-                        const cost = typeof size.cost === 'number' ? size.cost : 0;
-                        const profit = price - cost;
-                        const profitMargin = price > 0 ? (profit / price) * 100 : 0;
-                        const popularity = item.clicks_count ?? 0;
-                        return {
-                            ...item,
-                            profitMargin,
-                            popularity,
-                            classification: 'Dog',
-                        };
-                    });
-
-                    const margins = engineered.map(i => i.profitMargin).sort((a, b) => a - b);
-                    const popularities = engineered.map(i => i.popularity).sort((a, b) => a - b);
-                    const medianMargin = margins.length > 0 ? margins[Math.floor(margins.length / 2)] : 0;
-                    const medianPopularity = popularities.length > 0 ? popularities[Math.floor(popularities.length / 2)] : 0;
-
-                    const classificationOrder: Record<'Star' | 'Plow-Horse' | 'Puzzle' | 'Dog', number> = {
-                        Star: 1,
-                        Puzzle: 2,
-                        'Plow-Horse': 3,
-                        Dog: 4,
-                    };
-
-                    const classified = engineered.map((item) => {
-                        const highProfit = item.profitMargin >= medianMargin;
-                        const highPopularity = item.popularity >= medianPopularity;
-                        let classification: 'Star' | 'Plow-Horse' | 'Puzzle' | 'Dog' = 'Dog';
-                        if (highProfit && highPopularity) classification = 'Star';
-                        else if (highProfit && !highPopularity) classification = 'Puzzle';
-                        else if (!highProfit && highPopularity) classification = 'Plow-Horse';
-                        return { ...item, classification };
-                    });
-
-                    sortedItems = classified
-                      .sort((a, b) => {
-                          const orderA = classificationOrder[a.classification];
-                          const orderB = classificationOrder[b.classification];
-                          if (orderA !== orderB) return orderA - orderB;
-                          if (b.popularity !== a.popularity) return b.popularity - a.popularity;
-                          return (a.position ?? 999) - (b.position ?? 999);
-                      })
-                      .map((item) => item as MenuItem);
-                }
-
-                setMenuItems(sortedItems || []);
-                const cats = ['الكل', ...Array.from(new Set((items || []).map(item => item.category)))];
-                setCategories(cats as string[]);
+                setMenuItems(applySort(items));
+                const cats = ['الكل', ...Array.from(new Set(items.map(item => item.category)))];
+                setCategories(cats);
                 setLoading(false);
             }, (error) => {
                 console.error("Menu error:", error);
@@ -127,8 +107,10 @@ export default function PublicMenuPage() {
         console.error("Restaurant error:", error);
         setLoading(false);
     });
+      unsubRef.current = () => { unsubscribe(); unsubMenu?.(); };
+    });
 
-    return () => unsubscribe();
+    return () => { cancelled = true; unsubRef.current(); };
   }, [username]);
 
   const filteredItems = useMemo(() => {

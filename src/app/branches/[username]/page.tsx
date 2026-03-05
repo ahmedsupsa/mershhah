@@ -8,6 +8,7 @@ import { ChevronRight, MapPin, Phone, Clock, Info } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import { db } from '@/lib/firebase';
 import { collection, query, where, limit, onSnapshot } from 'firebase/firestore';
+import { getPublicPage } from '@/lib/public-pages';
 import { StorageImage } from '@/components/shared/StorageImage';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -24,41 +25,54 @@ export default function PublicBranchesPage() {
     if (!username) return;
 
     setLoading(true);
-    const restQuery = query(
-      collection(db, 'restaurants'),
-      where('username', '==', username),
-      limit(1)
-    );
 
-    const unsubscribe = onSnapshot(
-      restQuery,
-      (restSnapshot) => {
-        if (restSnapshot.empty) {
-          setRestaurant(null);
-          setBranches([]);
-          setLoading(false);
-          return;
-        }
+    getPublicPage(username).then((data) => {
+      if (data?.restaurant && Array.isArray(data.branches)) {
+        setRestaurant(data.restaurant);
+        setBranches(data.branches);
+        setLoading(false);
+        unsubBranchesRef.current = () => {};
+        return;
+      }
 
-        const restDoc = restSnapshot.docs[0];
-        const restData = { id: restDoc.id, ...restDoc.data() };
-        setRestaurant(restData);
+      const restQuery = query(
+        collection(db, 'restaurants'),
+        where('username', '==', username),
+        limit(1)
+      );
 
-        const branchesQuery = query(
-          collection(db, 'restaurants', restDoc.id, 'branches'),
-          where('status', '==', 'active')
-        );
+      let unsubBranches: (() => void) | null = null;
+      const unsubscribe = onSnapshot(
+        restQuery,
+        (restSnapshot) => {
+          if (restSnapshot.empty) {
+            setRestaurant(null);
+            setBranches([]);
+            setLoading(false);
+            return;
+          }
 
-        unsubBranchesRef.current = onSnapshot(branchesQuery, (snap) => {
-          setBranches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as any)));
-          setLoading(false);
-        });
-      },
-      () => setLoading(false)
-    );
+          const restDoc = restSnapshot.docs[0];
+          const restData = { id: restDoc.id, ...restDoc.data() };
+          setRestaurant(restData);
+
+          const branchesQuery = query(
+            collection(db, 'restaurants', restDoc.id, 'branches'),
+            where('status', '==', 'active')
+          );
+
+          unsubBranches = onSnapshot(branchesQuery, (snap) => {
+            setBranches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as any)));
+            setLoading(false);
+          });
+          unsubBranchesRef.current = () => { unsubscribe(); unsubBranches?.(); };
+        },
+        () => setLoading(false)
+      );
+      unsubBranchesRef.current = () => { unsubscribe(); unsubBranches?.(); };
+    });
 
     return () => {
-      unsubscribe();
       unsubBranchesRef.current?.();
     };
   }, [username]);

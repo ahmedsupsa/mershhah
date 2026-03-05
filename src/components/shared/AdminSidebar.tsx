@@ -21,6 +21,7 @@ import {
   Megaphone,
   AppWindow,
   Package,
+  TrendingUp,
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { Separator } from "../ui/separator";
@@ -51,6 +52,7 @@ export function AdminSidebar() {
     { href: "/admin/support", label: "الدعم المباشر", icon: MessageSquare, permissionId: 'support' },
     { href: "/admin/team", label: "الفريق", icon: Users, permissionId: 'team' },
     { href: "/admin/workflow", label: "سير العمل", icon: Activity, permissionId: 'workflow' },
+    { href: "/admin/sales", label: "دليل المبيعات", icon: TrendingUp, permissionId: 'sales' },
   ];
 
   useEffect(() => {

@@ -26,6 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
 import { cn } from "@/lib/utils";
 import { MenuItem } from "@/lib/types";
+import { syncPublicPage } from '@/lib/public-pages';
 import Link from 'next/link';
 const sizeSchema = z.object({
   id: z.string(),
@@ -231,6 +232,7 @@ export function EditMenuItemDialog({ children, menuItem, menuItems, onSave, rest
             const successMsg = isEditing 
               ? 'تم تعديل الطبق بنجاح' : 'تم إضافة الطبق بنجاح';
             toast({ title: successMsg });
+            syncPublicPage(restaurantId).catch(() => {});
             onSave?.();
             setOpen(false);
         } catch (error: any) {

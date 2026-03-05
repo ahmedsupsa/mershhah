@@ -1,34 +1,40 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useRouter, notFound } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { SendHorizonal, Bot, User, ChevronRight, Utensils } from 'lucide-react';
+import { SendHorizonal, User, ChevronRight, Utensils, Info, MessageCircle, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, limit, doc, addDoc, serverTimestamp, setDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, doc, query, where, getDocs, getDoc, limit, addDoc, serverTimestamp } from 'firebase/firestore';
+import { getPublicPage } from '@/lib/public-pages';
 import type { Restaurant, AiMessage, MenuItem, Offer } from '@/lib/types';
 import { restaurantChat } from '@/ai/flows/restaurant-chat-flow';
 import Link from 'next/link';
 import { StorageImage } from '@/components/shared/StorageImage';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AiAssistantPage() {
   const params = useParams();
   const router = useRouter();
   const username = params.username as string;
-  
+
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [branches, setBranches] = useState<Array<{ id?: string; name?: string; address?: string; city?: string; district?: string; opening_hours?: string; phone?: string; google_maps_url?: string }>>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [streamingLength, setStreamingLength] = useState(0);
 
   useEffect(() => {
     let sid = localStorage.getItem(`mershah-session-${username}`);
@@ -45,39 +51,64 @@ export default function AiAssistantPage() {
     const fetchRestaurantData = async () => {
       setLoading(true);
       try {
-        const q = query(collection(db, "restaurants"), where("username", "==", username), limit(1));
-        const querySnapshot = await getDocs(q);
-        
-        if (querySnapshot.empty) {
-          notFound();
-          return;
-        } else {
-          const restDoc = querySnapshot.docs[0];
-          const restData = { id: restDoc.id, ...restDoc.data() } as Restaurant;
-          setRestaurant(restData);
-
-          const menuQuery = collection(db, 'restaurants', restDoc.id, 'menu_items');
-          const offersQuery = collection(db, 'restaurants', restDoc.id, 'offers');
-          const [menuSnap, offersSnap] = await Promise.all([
-            getDocs(menuQuery),
-            getDocs(offersQuery)
-          ]);
-          
-          setMenuItems(menuSnap.docs.map(d => d.data() as MenuItem));
-          setOffers(offersSnap.docs.map(d => d.data() as Offer));
-
+        const data = await getPublicPage(username);
+        if (data?.restaurant) {
+          setRestaurant(data.restaurant);
+          setMenuItems(Array.isArray(data.menu) ? (data.menu as MenuItem[]) : []);
+          setOffers(Array.isArray(data.offers) ? (data.offers as Offer[]) : []);
+          setBranches(Array.isArray(data.branches) ? data.branches : []);
           setMessages([
-            { 
-              id: '1', 
-              sender: 'bot', 
-              text: "أنا رفيقك الذكي. كيف أقدر أساعدك اليوم؟", 
-              timestamp: new Date() 
+            {
+              id: '1',
+              sender: 'bot',
+              text: "أنا رفيقك الذكي. كيف أقدر أساعدك اليوم؟",
+              timestamp: new Date()
             }
           ]);
+          setLoading(false);
+          return;
         }
+
+        const q = query(collection(db, "restaurants"), where("username", "==", username), limit(1));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          setRestaurant(null);
+          setLoading(false);
+          return;
+        }
+
+        const restDoc = querySnapshot.docs[0];
+        const restData = { id: restDoc.id, ...restDoc.data() } as Restaurant;
+        setRestaurant(restData);
+
+        const menuQuery = collection(db, 'restaurants', restDoc.id, 'menu_items');
+        const offersQuery = collection(db, 'restaurants', restDoc.id, 'offers');
+        const branchesQuery = query(
+          collection(db, 'restaurants', restDoc.id, 'branches'),
+          where('status', '==', 'active')
+        );
+        const [menuSnap, offersSnap, branchesSnap] = await Promise.all([
+          getDocs(menuQuery),
+          getDocs(offersQuery),
+          getDocs(branchesQuery)
+        ]);
+
+        setMenuItems(menuSnap.docs.map(d => d.data() as MenuItem));
+        setOffers(offersSnap.docs.map(d => d.data() as Offer));
+        setBranches(branchesSnap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+
+        setMessages([
+          {
+            id: '1',
+            sender: 'bot',
+            text: "أنا رفيقك الذكي. كيف أقدر أساعدك اليوم؟",
+            timestamp: new Date()
+          }
+        ]);
       } catch (error) {
         console.error("Error fetching restaurant data", error);
-        notFound();
+        setRestaurant(null);
       } finally {
         setLoading(false);
       }
@@ -87,10 +118,42 @@ export default function AiAssistantPage() {
   }, [username, sessionId]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const scrollToBottom = () => {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      });
+    };
+    scrollToBottom();
+  }, [messages, isTyping, streamingLength]);
+
+  // كتابة تدريجية لرد المساعد
+  useEffect(() => {
+    if (!streamingMessageId || !restaurant || !sessionId) return;
+    const msg = messages.find((m) => m.id === streamingMessageId);
+    if (!msg || msg.sender !== 'bot') return;
+    const fullText = msg.text || '';
+    if (fullText.length === 0) {
+      setStreamingMessageId(null);
+      return;
     }
-  }, [messages, isTyping]);
+
+    const chunk = 2;
+    const interval = 25;
+    const timer = setInterval(() => {
+      setStreamingLength((prev) => {
+        const next = Math.min(prev + chunk, fullText.length);
+        if (next >= fullText.length) {
+          clearInterval(timer);
+          const messagesColRef = collection(db, 'restaurants', restaurant.id, 'ai_sessions', sessionId, 'messages');
+          addDoc(messagesColRef, { sender: 'bot', text: fullText, timestamp: serverTimestamp() }).catch(() => {});
+          setStreamingMessageId(null);
+          return fullText.length;
+        }
+        return next;
+      });
+    }, interval);
+    return () => clearInterval(timer);
+  }, [streamingMessageId, restaurant?.id, sessionId, messages]);
 
   const handleSend = async () => {
     if (!input.trim() || !sessionId || !restaurant) return;
@@ -105,10 +168,34 @@ export default function AiAssistantPage() {
       const messagesColRef = collection(db, 'restaurants', restaurant.id, 'ai_sessions', sessionId, 'messages');
       await addDoc(messagesColRef, { sender: 'user', text: userMsgContent, timestamp: serverTimestamp() });
 
+      const restSnap = await getDoc(doc(db, 'restaurants', restaurant.id));
+      const freshRest = restSnap.exists() ? { id: restSnap.id, ...restSnap.data() } : restaurant;
+      setRestaurant((prev) => (prev ? { ...prev, ...freshRest } : null));
+      const apps = Array.isArray(freshRest.applications) ? freshRest.applications : [];
+      const appUrl = (app: any) => (app?.value ?? app?.url ?? app?.link ?? '').toString().trim();
+      const applicationsList = apps
+        .filter((app: any) => app?.name && appUrl(app))
+        .map((app: any) => ({ name: String(app.name), url: appUrl(app) }));
+
       const restaurantContextData = {
-          name: restaurant.name,
-          menu: menuItems.map(i => ({ name: i.name, price: i.sizes?.[0]?.price })),
-          offers: offers.map(o => ({ title: o.title })),
+        name: freshRest.name ?? restaurant.name,
+        menu: menuItems.map(i => ({ name: i.name, price: i.sizes?.[0]?.price })),
+        offers: offers.map(o => ({ title: o.title, description: o.description })),
+        applications: applicationsList,
+        branches: branches.map(b => ({
+          name: b.name,
+          address: b.address,
+          city: b.city,
+          district: b.district,
+          opening_hours: b.opening_hours,
+          phone: b.phone,
+          google_maps_url: b.google_maps_url,
+        })),
+        socialLinks: Array.isArray(freshRest.socialLinks)
+          ? freshRest.socialLinks
+              .filter((link: any) => link?.platform && link?.value)
+              .map((link: any) => ({ platform: link.platform, value: link.value }))
+          : [],
       };
 
       const aiResponse = await restaurantChat({
@@ -116,143 +203,260 @@ export default function AiAssistantPage() {
         restaurantData: JSON.stringify(restaurantContextData)
       });
 
-      const botMsg: AiMessage = { id: (Date.now() + 1).toString(), sender: 'bot', text: aiResponse.smartReply, timestamp: new Date(), session_id: sessionId };
-      await addDoc(messagesColRef, { sender: 'bot', text: aiResponse.smartReply, timestamp: serverTimestamp() });
+      const botId = (Date.now() + 1).toString();
+      const botMsg = {
+        id: botId,
+        sender: 'bot' as const,
+        text: aiResponse.smartReply,
+        timestamp: new Date(),
+        session_id: sessionId,
+        showApplications: aiResponse.showApplications === true,
+        showBranches: aiResponse.showBranches === true,
+      };
       setMessages(prev => [...prev, botMsg]);
-
+      setIsTyping(false);
+      setStreamingMessageId(botId);
+      setStreamingLength(0);
     } catch (error) {
-        setMessages(prev => [...prev, { id: 'err', sender: 'bot', text: 'حدث خطأ فني...', timestamp: new Date() }]);
-    } finally {
-        setIsTyping(false);
+      setMessages(prev => [...prev, { id: 'err', sender: 'bot', text: 'حدث خطأ فني...', timestamp: new Date() }]);
+      setIsTyping(false);
     }
   };
 
-  if (loading || !restaurant) return <div className="flex items-center justify-center h-screen">جاري التحميل...</div>;
-  
-  // المساعد الذكي للعملاء متاح فقط في الباقات المدفوعة
-  if (!restaurant.is_paid_plan) {
+  const primaryColor = restaurant?.primaryColor || '#e11d48';
+
+  const toWhatsAppUrl = (phone: string | undefined): string => {
+    if (!phone || !phone.trim()) return '#';
+    const digits = phone.replace(/\D/g, '');
+    if (!digits.length) return '#';
+    const withCountry = digits.startsWith('966') ? digits : digits.startsWith('0') ? '966' + digits.slice(1) : digits.length === 9 && digits.startsWith('5') ? '966' + digits : '966' + digits;
+    return `https://wa.me/${withCountry}`;
+  };
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50" dir="rtl">
-        <div className="max-w-md mx-auto bg-white rounded-3xl shadow-lg p-8 text-center space-y-4 border border-gray-100">
-          <h1 className="text-xl font-black">المساعد الذكي متاح في الباقات المدفوعة</h1>
-          <p className="text-sm text-muted-foreground">
-            لتفعيل المساعد الذكي لعملائك، قم بترقية باقتك من لوحة التحكم في مرشح.
-          </p>
+      <div className="min-h-screen bg-[#fafafa]" dir="rtl">
+        <div className="h-24 w-full bg-gray-100 animate-pulse" />
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+          <Skeleton className="h-24 w-24 rounded-2xl mx-auto" />
+          <Skeleton className="h-8 w-48 mx-auto" />
+          <Skeleton className="h-20 w-full rounded-2xl" />
+          <Skeleton className="h-20 w-full rounded-2xl" />
+          <Skeleton className="h-20 w-full rounded-2xl" />
         </div>
       </div>
     );
   }
 
-  const primaryColor = restaurant.primaryColor || '#e11d48';
+  if (!restaurant) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-muted/30 text-center p-6" dir="rtl">
+        <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500">
+          <Info className="h-10 w-10" />
+        </div>
+        <h1 className="text-2xl font-black text-right mt-4">المطعم غير موجود!</h1>
+        <Button asChild className="w-full max-w-xs mt-6 h-12 rounded-2xl font-bold">
+          <Link href="/">العودة للرئيسية</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  if (!restaurant.is_paid_plan) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#fafafa] text-center p-6" dir="rtl">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-4">
+          <h1 className="text-xl font-black text-gray-900">المساعد الذكي متاح في الباقات المدفوعة</h1>
+          <p className="text-sm text-muted-foreground">
+            لتفعيل المساعد الذكي لعملائك، قم بترقية باقتك من لوحة التحكم في مرشح.
+          </p>
+          <Button asChild className="w-full h-12 rounded-2xl font-bold">
+            <Link href={`/hub/${username}`}>العودة للرابط الرئيسي</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 overflow-hidden" dir="rtl">
-      <header className="px-6 py-4 bg-white shadow-sm border-b flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="mr-[-8px]">
+    <div className="flex flex-col min-h-screen bg-[#fafafa] pb-12 overflow-x-hidden" dir="rtl">
+      {/* الهيدر - نفس أسلوب صفحات الفروع والمنيو */}
+      <div className="bg-white border-b px-4 sm:px-6 py-6 sm:py-8 flex flex-col items-center text-center relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-4 right-4 rounded-2xl bg-muted/50 text-foreground hover:bg-muted"
+          asChild
+        >
+          <Link href={`/hub/${username}`}>
             <ChevronRight className="h-6 w-6" />
-          </Button>
-          <div className="flex items-center gap-3">
-             <Avatar className="h-10 w-10 border-2 overflow-hidden" style={{ borderColor: primaryColor }}>
-                <StorageImage imagePath={restaurant.logo} alt={restaurant.name} fill className="object-cover" sizes="40px" />
-                <AvatarFallback>{restaurant.name[0]}</AvatarFallback>
-            </Avatar>
-            <div className="text-right">
-                <h1 className="text-base font-bold leading-tight">{restaurant.name}</h1>
-                <div className="flex items-center gap-1 text-[10px] text-green-600 font-bold uppercase">
-                    <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                    </span>
-                    متصل ذكياً
-                </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="bg-white/80 backdrop-blur-md px-4 py-2 flex gap-2 overflow-x-auto border-b no-scrollbar">
-          <Link href={`/menu/${username}`}>
-            <Button variant="outline" size="sm" className="rounded-full shrink-0 gap-2 text-xs">
-                <Utensils className="h-3.5 w-3.5" style={{ color: primaryColor }} />
-                قائمة الطعام
-            </Button>
           </Link>
+        </Button>
+
+        <Avatar className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl shadow-lg overflow-hidden">
+          <StorageImage
+            imagePath={restaurant.logo}
+            alt={restaurant.name}
+            fill
+            sizes="96px"
+            className="object-cover"
+          />
+          <AvatarFallback className="rounded-2xl">{restaurant.name[0]}</AvatarFallback>
+        </Avatar>
+        <div className="space-y-1 mt-4">
+          <h1 className="text-xl sm:text-2xl font-black text-gray-900">{restaurant.name}</h1>
+          <p className="text-sm text-muted-foreground font-medium">المساعد الذكي</p>
+        </div>
+        <Link
+          href={`/menu/${username}`}
+          className="inline-flex items-center gap-2 mt-3 text-sm font-bold rounded-xl px-4 py-2 border border-gray-100 hover:bg-gray-50 transition-colors"
+          style={{ color: primaryColor }}
+        >
+          <Utensils className="h-4 w-4" />
+          قائمة الطعام
+        </Link>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6" ref={scrollRef}>
-          <AnimatePresence initial={false}>
-            {messages.map((msg) => (
+      {/* منطقة المحادثة - داخل نفس الحاوية والكروت */}
+      <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 flex flex-col min-h-0">
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden flex flex-col flex-1 min-h-[50vh]">
+          <div className="flex-1 overflow-y-auto p-4 space-y-6" ref={scrollRef}>
+            <AnimatePresence initial={false}>
+              {messages.map((msg) => (
                 <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    className={cn("flex", msg.sender === 'user' ? "justify-end" : "justify-start")}
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  className={cn("flex", msg.sender === 'user' ? "justify-end" : "justify-start")}
                 >
-                    <div className={cn("flex gap-2 max-w-[85%]", msg.sender === 'user' ? "flex-row-reverse" : "flex-row")}>
-                        <Avatar className="h-8 w-8 shrink-0 mt-1 border overflow-hidden">
-                            {msg.sender === 'bot' ? (
+                  <div className={cn("flex gap-2 max-w-[85%]", msg.sender === 'user' ? "flex-row-reverse" : "flex-row")}>
+                    <Avatar className="h-8 w-8 shrink-0 mt-1 border overflow-hidden rounded-xl">
+                      {msg.sender === 'bot' ? (
                                 <div className="w-full h-full relative" style={{ backgroundColor: primaryColor }}>
-                                    <StorageImage imagePath={restaurant.logo} alt={restaurant.name} fill className="object-cover" sizes="32px" />
-                                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center"><Bot className="h-4 w-4 text-white opacity-50" /></div>
+                                  <StorageImage imagePath={restaurant.logo} alt={restaurant.name} fill className="object-cover" sizes="32px" />
                                 </div>
-                            ) : (
-                                <AvatarFallback className="bg-gray-200"><User className="h-4 w-4 text-gray-500" /></AvatarFallback>
-                            )}
-                        </Avatar>
-                        <div 
-                            className={cn(
-                                "px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed",
-                                msg.sender === 'user' 
-                                ? 'bg-primary text-primary-foreground' 
-                                : 'bg-white text-gray-800 border',
-                                msg.sender === 'user' ? "rounded-tr-none" : "rounded-tl-none"
-                            )}
-                            style={msg.sender === 'user' ? { backgroundColor: primaryColor } : {}}
-                        >
-                            {msg.text}
+                      ) : (
+                        <AvatarFallback className="bg-gray-200 rounded-xl">
+                          <User className="h-4 w-4 text-gray-500" />
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div className="flex flex-col gap-2 min-w-0">
+                      <div
+                        className={cn(
+                          "px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed",
+                          msg.sender === 'user'
+                            ? 'text-white'
+                            : 'bg-gray-50 text-gray-800 border border-gray-100',
+                          msg.sender === 'user' ? "rounded-tr-none" : "rounded-tl-none"
+                        )}
+                        style={msg.sender === 'user' ? { backgroundColor: primaryColor } : {}}
+                      >
+                        {msg.sender === 'bot' && msg.id === streamingMessageId
+                          ? (msg.text || '').slice(0, streamingLength)
+                          : msg.text}
+                        {msg.sender === 'bot' && msg.id === streamingMessageId && streamingLength < (msg.text || '').length && (
+                          <span className="inline-block w-0.5 h-4 bg-current align-middle animate-pulse mr-0.5" aria-hidden />
+                        )}
+                      </div>
+                      {msg.sender === 'bot' && (msg as any).showApplications && Array.isArray(restaurant.applications) && restaurant.applications.filter((a: any) => a?.name && (a?.value || a?.url)).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {restaurant.applications
+                            .filter((a: any) => a?.name && (a?.value || a?.url))
+                            .map((app: any, idx: number) => (
+                              <a
+                                key={app.id || idx}
+                                href={(app.value || app.url || '').trim() || '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 transition-all text-right"
+                              >
+                                <span className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+                                  <StorageImage imagePath={app.logo} alt={app.name} fill className="object-contain" sizes="32px" />
+                                </span>
+                                <span className="text-sm font-bold text-gray-800">{app.name}</span>
+                              </a>
+                            ))}
                         </div>
+                      )}
+                      {msg.sender === 'bot' && (msg as any).showBranches && branches.length > 0 && (
+                        <div className="space-y-3 mt-2">
+                          {branches.map((branch: any) => (
+                            <div key={branch.id || branch.name} className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm text-right">
+                              {branch.name && <p className="text-sm font-bold text-gray-800 mb-2">{branch.name}</p>}
+                              <div className="flex flex-wrap gap-2">
+                                {branch.phone && String(branch.phone).trim() && (
+                                  <a
+                                    href={toWhatsAppUrl(branch.phone)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-sm transition-colors"
+                                  >
+                                    <MessageCircle className="h-4 w-4 shrink-0" />
+                                    واتساب
+                                  </a>
+                                )}
+                                {(branch.google_maps_url || branch.address) && (
+                                  <a
+                                    href={branch.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([branch.address, branch.city, branch.district].filter(Boolean).join('، '))}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-sm transition-colors"
+                                  >
+                                    <MapPin className="h-4 w-4 shrink-0" />
+                                    الانتقال للفرع
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                  </div>
                 </motion.div>
-            ))}
-          </AnimatePresence>
-          
-          {isTyping && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-                 <div className="flex gap-2 items-center bg-white border px-4 py-3 rounded-2xl shadow-sm">
-                    <div className="flex gap-1">
-                        <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce"></span>
-                        <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                        <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                    </div>
-                 </div>
-            </motion.div>
-          )}
-      </div>
+              ))}
+            </AnimatePresence>
 
-      <footer className="p-4 bg-white border-t pb-8">
-          <div className="max-w-4xl mx-auto flex gap-2 items-center">
+            {isTyping && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+                <div className="flex gap-2 items-center bg-gray-50 border border-gray-100 px-4 py-3 rounded-2xl shadow-sm">
+                  <div className="flex gap-1">
+                    <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" />
+                    <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+            <div ref={bottomRef} className="h-1 shrink-0" aria-hidden />
+          </div>
+
+          <footer className="p-4 border-t border-gray-100 bg-white">
+            <div className="flex gap-2 items-center">
               <div className="relative flex-1">
-                <Input 
-                    placeholder="اسأل عن أي شيء ببالك..."
-                    className="h-12 rounded-full border-gray-200 focus-visible:ring-offset-0 focus-visible:ring-1 pr-4 pl-12"
-                    style={{ '--tw-ring-color': primaryColor } as any}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                <Input
+                  placeholder="اسأل عن أي شيء ببالك..."
+                  className="h-12 rounded-2xl border-gray-200 focus-visible:ring-offset-0 focus-visible:ring-2 pr-4 pl-12"
+                  style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 />
-                <Button 
-                    size="icon" 
-                    className="absolute top-1/2 -translate-y-1/2 h-9 w-9 rounded-full shadow-md left-1.5"
-                    style={{ backgroundColor: primaryColor }}
-                    onClick={handleSend}
-                    disabled={!input.trim() || isTyping}
+                <Button
+                  size="icon"
+                  className="absolute top-1/2 -translate-y-1/2 h-9 w-9 rounded-xl left-1.5"
+                  style={{ backgroundColor: primaryColor }}
+                  onClick={handleSend}
+                  disabled={!input.trim() || isTyping}
                 >
-                    <SendHorizonal className="h-5 w-5" />
+                  <SendHorizonal className="h-5 w-5" />
                 </Button>
               </div>
-          </div>
-      </footer>
+            </div>
+          </footer>
+        </div>
+      </div>
     </div>
   );
 }

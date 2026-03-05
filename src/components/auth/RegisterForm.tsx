@@ -36,6 +36,7 @@ const allAdminPermissions = [
   'support',
   'team',
   'workflow',
+  'sales',
 ];
 
 const formSchema = z.object({

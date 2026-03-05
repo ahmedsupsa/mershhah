@@ -44,6 +44,7 @@ const adminPages = [
   { href: "/admin/support", permissionId: 'support' },
   { href: "/admin/team", permissionId: 'team' },
   { href: "/admin/workflow", permissionId: 'workflow' },
+  { href: "/admin/sales", permissionId: 'sales' },
 ];
 
 const SUPER_ADMIN_EMAIL = 'ahmedsupsa@gmail.com';
@@ -161,7 +162,7 @@ export function LoginForm() {
             };
 
             if (isSuperAdmin) {
-                profileData.admin_permissions = ['dashboard', 'management', 'financials', 'store-management', 'applications', 'announcements', 'support', 'team', 'workflow'];
+                profileData.admin_permissions = ['dashboard', 'management', 'financials', 'store-management', 'applications', 'announcements', 'support', 'team', 'workflow', 'sales'];
             }
 
             batch.set(profileDocRef, profileData);

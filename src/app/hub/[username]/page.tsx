@@ -17,6 +17,7 @@ import {
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { collection, doc, query, where, limit, onSnapshot, updateDoc, increment, addDoc, serverTimestamp } from 'firebase/firestore';
+import { getPublicPage } from '@/lib/public-pages';
 import { StorageImage } from '@/components/shared/StorageImage';
 import { InstagramIcon, TikTokIcon, SnapchatIcon, XIcon, WhatsAppIcon, WebsiteIcon, FacebookIcon, YoutubeIcon } from '@/components/shared/SocialIcons';
 import { errorEmitter } from '@/lib/firebase/error-emitter';
@@ -56,6 +57,7 @@ export default function RestaurantHubPage() {
   const recordedViewOfferIds = useRef<Set<string>>(new Set());
   const searchParams = useSearchParams();
   const hubVisitRecorded = useRef(false);
+  const unsubRef = useRef<() => void>(() => {});
 
   // تسجيل زيارة الـ hub حسب المصدر (داخل الفرع عبر QR / خارج الفرع عبر رابط) لظهورها في التقارير
   useEffect(() => {
@@ -81,50 +83,65 @@ export default function RestaurantHubPage() {
   useEffect(() => {
     if (!username) return;
     setLoading(true);
+    let cancelled = false;
+    let unsubRest: (() => void) | null = null;
+    let unsubOffers: (() => void) | null = null;
 
-    const restQuery = query(collection(db, "restaurants"), where("username", "==", username), limit(1));
-    
-    const unsubscribe = onSnapshot(restQuery, (snapshot) => {
+    getPublicPage(username).then((data) => {
+      if (cancelled) return;
+      if (data) {
+        setRestaurant(data.restaurant);
+        setOffers(data.offers ?? []);
+        setLoading(false);
+        return;
+      }
+
+      const restQuery = query(collection(db, "restaurants"), where("username", "==", username), limit(1));
+      unsubRest = onSnapshot(restQuery, (snapshot) => {
+        if (cancelled) return;
         if (snapshot.empty) {
-            setRestaurant(null);
-            setLoading(false);
-            return;
+          setRestaurant(null);
+          setLoading(false);
+          return;
         }
-
         const restDoc = snapshot.docs[0];
         const restData = { ...restDoc.data(), id: restDoc.id };
         setRestaurant(restData);
-
         const offersQuery = query(collection(db, 'restaurants', restDoc.id, 'offers'), where("status", "==", "active"));
-        const unsubOffers = onSnapshot(offersQuery, (snap) => {
-            const now = new Date();
-            const validOffers = snap.docs
-                .map(d => ({ ...d.data(), id: d.id } as any))
-                .filter(offer => {
-                    const expiryDate = offer.valid_until?.toDate ? offer.valid_until.toDate() : new Date(offer.valid_until);
-                    return expiryDate > now;
-                });
-            setOffers(validOffers);
-        }, async (serverError) => {
-            const permissionError = new FirestorePermissionError({
-                path: `restaurants/${restDoc.id}/offers`,
-                operation: 'list',
-            } satisfies SecurityRuleContext, serverError);
-            errorEmitter.emit('permission-error', permissionError);
-        });
-
-        setLoading(false);
-        return () => unsubOffers();
-    }, async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-            path: 'restaurants',
+        unsubOffers = onSnapshot(offersQuery, (snap) => {
+          if (cancelled) return;
+          const now = new Date();
+          const validOffers = snap.docs
+            .map(d => ({ ...d.data(), id: d.id } as any))
+            .filter((offer: any) => {
+              const expiryDate = offer.valid_until?.toDate ? offer.valid_until.toDate() : new Date(offer.valid_until);
+              return expiryDate > now;
+            });
+          setOffers(validOffers);
+        }, (serverError: any) => {
+          const permissionError = new FirestorePermissionError({
+            path: `restaurants/${restDoc.id}/offers`,
             operation: 'list',
+          } satisfies SecurityRuleContext, serverError);
+          errorEmitter.emit('permission-error', permissionError);
+        });
+        setLoading(false);
+      }, (serverError: any) => {
+        if (cancelled) return;
+        const permissionError = new FirestorePermissionError({
+          path: 'restaurants',
+          operation: 'list',
         } satisfies SecurityRuleContext, serverError);
         errorEmitter.emit('permission-error', permissionError);
         setLoading(false);
+      });
+      unsubRef.current = () => { unsubRest?.(); unsubOffers?.(); };
     });
 
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+      unsubRef.current();
+    };
   }, [username]);
 
   const handleOfferClick = async (offer: { id: string; external_link?: string | null }) => {

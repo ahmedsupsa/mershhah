@@ -32,6 +32,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { db, storage } from "@/lib/firebase";
+import { syncPublicPage } from '@/lib/public-pages';
 import { ref, uploadBytes } from "firebase/storage";
 import { collection, doc, addDoc, updateDoc, getDocs } from "firebase/firestore";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -173,6 +174,7 @@ export function EditOfferDialog({ children, offer, onSave, restaurantId, userId 
               await addDoc(offersCollection, offerData);
           }
           toast({ title: `تم ${isEditing ? 'تعديل' : 'إضافة'} العرض بنجاح` });
+          syncPublicPage(restaurantId).catch(() => {});
           onSave?.();
           setOpen(false);
         } catch (error: any) {
