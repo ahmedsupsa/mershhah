@@ -8,15 +8,15 @@ import { Mail } from 'lucide-react';
 
 export function PublicFooter() {
   return (
-    <footer className="mt-0 border-t border-gray-100 rounded-t-3xl bg-white py-16 md:py-20">
-      <div className="container mx-auto px-4 sm:px-6 max-w-7xl">
+    <footer className="mt-0 border-t border-gray-100 rounded-t-3xl bg-white py-16 md:py-20" dir="rtl">
+      <div className="container mx-auto px-4 sm:px-6 max-w-7xl text-right">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12">
           <div className="col-span-2 md:col-span-4 lg:col-span-2 space-y-6">
             <Logo />
             <p className="text-gray-500 max-w-xs font-medium leading-relaxed">
               الواجهة الرقمية المتكاملة لنمو المطاعم والمقاهي في المملكة العربية السعودية.
             </p>
-            <div className="flex gap-4">
+            <div className="flex gap-4 justify-end">
               <a href="https://www.instagram.com/mershhah/" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-primary transition-colors cursor-pointer">
                 <InstagramIcon size={20} />
               </a>

@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { collection, doc, addDoc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, updateDoc, setDoc } from "firebase/firestore";
 import type { Plan } from "@/lib/types";
 
 const formSchema = z.object({
@@ -27,6 +27,9 @@ const formSchema = z.object({
   payment_link: z.string().url({ message: "الرجاء إدخال رابط دفع صحيح." }).optional().or(z.literal('')),
   is_active: z.boolean().default(true),
   is_featured: z.boolean().default(false),
+  // يتم تخزين الميزات كسطر لكل ميزة، ونحوّلها إلى كائن features قبل الحفظ
+  features_included: z.string().optional(),
+  features_excluded: z.string().optional(),
 });
 
 
@@ -54,35 +57,87 @@ export function EditPlanDialog({ children, plan, onSave }: EditPlanDialogProps) 
         payment_link: '',
         is_active: true,
         is_featured: false,
+        features_included: '',
+        features_excluded: '',
     }
   });
 
   useEffect(() => {
     if (open) {
-      form.reset(isEditing ? {
-        ...plan,
-        payment_link: plan.payment_link || '',
-      } : {
-        name: '',
-        description: '',
-        price: 0,
-        duration_months: 1,
-        payment_link: '',
-        is_active: true,
-        is_featured: false,
-      });
+      if (isEditing && plan) {
+        const includedLines: string[] = [];
+        const excludedLines: string[] = [];
+
+        if (plan.features) {
+          Object.entries(plan.features).forEach(([label, included]) => {
+            if (!label.trim()) return;
+            if (included) includedLines.push(label);
+            else excludedLines.push(label);
+          });
+        }
+
+        form.reset({
+          name: plan.name,
+          description: plan.description,
+          price: plan.price,
+          duration_months: plan.duration_months,
+          payment_link: plan.payment_link || '',
+          is_active: plan.is_active,
+          is_featured: plan.is_featured,
+          features_included: includedLines.join('\n'),
+          features_excluded: excludedLines.join('\n'),
+        });
+      } else {
+        form.reset({
+          name: '',
+          description: '',
+          price: 0,
+          duration_months: 1,
+          payment_link: '',
+          is_active: true,
+          is_featured: false,
+          features_included: '',
+          features_excluded: '',
+        });
+      }
     }
   }, [open, plan, isEditing, form]);
 
   async function onSubmit(values: FormValues) {
     startSaving(async () => {
         try {
-            if (isEditing) {
-                const planRef = doc(db, 'plans', plan.id);
-                await updateDoc(planRef, values);
+            // تحويل الحقول النصية إلى كائن features
+            const features: Record<string, boolean> = {};
+
+            const addLines = (text: string | undefined, included: boolean) => {
+              if (!text) return;
+              text
+                .split('\n')
+                .map((line) => line.trim())
+                .filter((line) => line.length > 0)
+                .forEach((line) => {
+                  features[line] = included;
+                });
+            };
+
+            addLines(values.features_included, true);
+            addLines(values.features_excluded, false);
+
+            const { features_included, features_excluded, ...rest } = values;
+
+            const payload: Partial<Plan> & {
+              features?: Record<string, boolean>;
+            } = {
+              ...(rest as any),
+              features: Object.keys(features).length > 0 ? features : undefined,
+            };
+
+            if (isEditing && plan) {
+              const planRef = doc(db, 'plans', plan.id);
+              await updateDoc(planRef, payload);
             } else {
-                const newPlanRef = doc(collection(db, 'plans'));
-                await setDoc(newPlanRef, { ...values, id: newPlanRef.id });
+              const newPlanRef = doc(collection(db, 'plans'));
+              await setDoc(newPlanRef, { ...payload, id: newPlanRef.id });
             }
             toast({ title: `تم ${isEditing ? 'تعديل' : 'إنشاء'} الباقة بنجاح` });
             onSave?.();
@@ -96,7 +151,7 @@ export function EditPlanDialog({ children, plan, onSave }: EditPlanDialogProps) 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'تعديل باقة' : 'إنشاء باقة جديدة'}</DialogTitle>
         </DialogHeader>
@@ -107,6 +162,32 @@ export function EditPlanDialog({ children, plan, onSave }: EditPlanDialogProps) 
             )}/>
              <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem><FormLabel>الوصف (اختياري)</FormLabel><FormControl><Textarea placeholder="وصف قصير للباقة ومميزاتها." {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+            <FormField control={form.control} name="features_included" render={({ field }) => (
+              <FormItem>
+                <FormLabel>المميزات المشمولة في هذه الباقة</FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={4}
+                    placeholder={"اكتب كل ميزة في سطر مستقل، مثلاً:\nمساعد ذكي للعملاء\nتحليلات متقدمة للتقييمات\nإنشاء صور بالذكاء الاصطناعي"}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}/>
+            <FormField control={form.control} name="features_excluded" render={({ field }) => (
+              <FormItem>
+                <FormLabel>مميزات غير مشمولة (تظهر بخط مشطوب)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={3}
+                    placeholder={"مثال:\nمدير علاقات مخصص\nدعم فني 24/7"}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
             )}/>
             <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="price" render={({ field }) => (

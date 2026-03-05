@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useTransition } from "react";
+import { useState, useEffect } from "react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { ToolsTable } from "@/components/admin/store/ToolsTable";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
+import Link from "next/link";
 
 
 export default function StoreManagementPage() {
@@ -67,12 +68,19 @@ export default function StoreManagementPage() {
                 title="إدارة متجر الأدوات"
                 description="إضافة وتعديل الأدوات المتاحة في المتجر للمشتركين."
             >
-                <EditToolDialog onSave={() => {}} allTools={tools}>
-                    <Button variant="outline" size="sm" className="gap-1 flex-row-reverse">
-                        إضافة أداة
-                        <PlusCircle className="h-4 w-4" />
+                <div className="flex gap-2 flex-row-reverse">
+                    <EditToolDialog onSave={() => {}} allTools={tools}>
+                        <Button variant="outline" size="sm" className="gap-1 flex-row-reverse">
+                            إضافة أداة
+                            <PlusCircle className="h-4 w-4" />
+                        </Button>
+                    </EditToolDialog>
+                    <Button asChild variant="ghost" size="sm" className="flex-row-reverse">
+                        <Link href="/admin/store/developers">
+                            دليل المطورين
+                        </Link>
                     </Button>
-                </EditToolDialog>
+                </div>
             </PageHeader>
             
             <ToolsTable tools={tools} onActionComplete={() => {}} />

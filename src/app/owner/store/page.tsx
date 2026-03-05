@@ -21,7 +21,7 @@ import { getTools } from '@/services/restaurant.service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUser } from '@/hooks/useUser';
 import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, serverTimestamp, query, onSnapshot, getDocs, limit, where } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, query, getDocs, limit, where, Timestamp } from 'firebase/firestore';
 
 const iconMap: { [key: string]: React.ElementType } = { ...icons, Box };
 
@@ -34,7 +34,7 @@ export default function ToolsStorePage() {
   const [subscription, setSubscription] = useState<any>(null);
   const { toast } = useToast();
 
-  const platformExpiryDate = subscription ? new Date(subscription.end_date.seconds * 1000).toLocaleDateString('ar-SA') : "اشتراك مرشح الأساسي";
+  const platformExpiryDate = subscription ? new Date(subscription.end_date.seconds * 1000).toLocaleDateString('ar-SA') : "غير محدد";
 
   const fetchAllData = async () => {
     if (!user || !user.id) return;
@@ -54,6 +54,8 @@ export default function ToolsStorePage() {
       
       const processedTools = toolsData.map(tool => ({
         ...tool,
+        billing_type: tool.billing_type || 'plan',
+        period_months: tool.period_months ?? null,
         icon: iconMap[tool.icon] || Box,
         installed: activatedIds.includes(tool.id),
       }));
@@ -76,19 +78,41 @@ export default function ToolsStorePage() {
     tool.title.includes(searchQuery) || tool.description.includes(searchQuery)
   );
 
-  const processFreeInstallation = (toolId: string) => {
+  const processFreeInstallation = (tool: any) => {
     if (!user || !user.id) return;
-    setInstalling(toolId);
+    setInstalling(tool.id);
 
     setTimeout(async () => {
         try {
-            const toolRef = doc(db, `profiles/${user.id}/activated_tools`, toolId);
+            const toolRef = doc(db, `profiles/${user.id}/activated_tools`, tool.id);
+
+            const billingType = tool.billing_type || 'plan';
+            const now = new Date();
+            let expiresAt: any = null;
+            let humanExpiry = '';
+
+            if (billingType === 'plan') {
+              expiresAt = subscription?.end_date || null;
+              humanExpiry = expiresAt
+                ? new Date(expiresAt.seconds * 1000).toLocaleDateString('ar-SA')
+                : platformExpiryDate;
+            } else {
+              const months = tool.period_months && tool.period_months > 0 ? tool.period_months : 1;
+              const endDate = new Date(now);
+              endDate.setMonth(endDate.getMonth() + months);
+              expiresAt = Timestamp.fromDate(endDate);
+              humanExpiry = endDate.toLocaleDateString('ar-SA');
+            }
+
             await setDoc(toolRef, {
-                tool_id: toolId,
+                tool_id: tool.id,
+                billing_type: billingType,
+                period_months: billingType === 'addon' ? (tool.period_months || 1) : null,
+                status: 'active',
                 activated_at: serverTimestamp(),
-                expires_at: subscription?.end_date || null
+                expires_at: expiresAt,
             });
-            toast({ title: "تم تفعيل الأداة بنجاح", description: `الأداة صالحة حتى ${platformExpiryDate}` });
+            toast({ title: "تم تفعيل الأداة بنجاح", description: `الأداة صالحة حتى ${humanExpiry}` });
             await fetchAllData();
         } catch(error: any) {
             toast({ title: "خطأ في التفعيل", description: error.message, variant: "destructive" });
@@ -100,10 +124,7 @@ export default function ToolsStorePage() {
 
 
   const handleInstallClick = (tool: any) => {
-    toast({
-        title: "نظام التفعيل قيد الصيانة",
-        description: "نقوم حالياً بتحديث نظام التفعيل. يرجى المحاولة مرة أخرى لاحقاً.",
-    });
+    processFreeInstallation(tool);
   };
   
   const renderSkeletons = () => (
@@ -130,7 +151,7 @@ export default function ToolsStorePage() {
     <div className="space-y-8 pb-10">
       <PageHeader
         title="متجر الأدوات"
-        description="تصفح وفعل أدوات إضافية لتنمية مشروعك. تنتهي صلاحية الأدوات مع اشتراك مرشح الأساسي."
+        description="تصفح وفعل أدوات إضافية لتنمية مشروعك. بعض الأدوات ترتبط باشتراك مرشح الأساسي، وبعضها يكون باشتراك مستقل حسب مدة الأداة."
       >
         <div className="relative w-full max-w-sm me-auto">
             <Search className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -146,7 +167,7 @@ export default function ToolsStorePage() {
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 text-amber-800">
         <Clock className="h-5 w-5 shrink-0" />
         <p className="text-sm font-medium">
-            تنبيه: جميع الأدوات المفعلة ستكون صالحة حتى انتهاء اشتراكك في <span className="font-bold underline">{platformExpiryDate}</span>.
+            تنبيه: الأدوات من نوع <span className="font-bold">خطة مرشح</span> تنتهي مع اشتراكك الأساسي، أما الأدوات من نوع <span className="font-bold">اشتراك مستقل</span> فتنتهي حسب مدة الأداة (مثلاً شهر أو ٣ شهور).
         </p>
       </div>
 

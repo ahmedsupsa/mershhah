@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useTransition, useEffect, useMemo } from "react";
+import { useState, useTransition, useEffect, useMemo, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,13 +16,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Code2, Copy, Sparkles, ChevronsUpDown, Check } from "lucide-react";
-import { db } from '@/lib/firebase';
-import { collection, doc, addDoc, updateDoc, serverTimestamp, setDoc, getDoc } from "firebase/firestore";
+import { db, storage } from '@/lib/firebase';
+import { collection, doc, updateDoc, setDoc, getDoc } from "firebase/firestore";
 import { Separator } from "@/components/ui/separator";
 import { generateToolIdea } from "@/ai/flows/generate-tool-ideas";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { cn } from "@/lib/utils";
+import { StorageImage } from "@/components/shared/StorageImage";
+import type { Tool } from "@/lib/types";
 
 
 const formSchema = z.object({
@@ -35,13 +38,15 @@ const formSchema = z.object({
   color: z.string().regex(/^text-/, "يجب أن يبدأ بـ 'text-'"),
   bg_color: z.string().regex(/^bg-/, "يجب أن يبدأ بـ 'bg-'"),
   popular: z.boolean().default(false),
+  billing_type: z.enum(["plan", "addon"]).default("plan"),
+  period_months: z.coerce.number().int().min(1, "المدة يجب أن تكون شهراً واحداً على الأقل.").nullable().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 interface EditToolDialogProps {
   children: React.ReactNode;
-  tool?: any;
+  tool?: Tool;
   allTools?: any[];
   onSave?: () => void;
 }
@@ -65,6 +70,9 @@ export function EditToolDialog({ children, tool, allTools = [], onSave }: EditTo
   const isEditing = !!tool;
 
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(tool?.image_path || null);
+  const [localImageFile, setLocalImageFile] = useState<File | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -86,6 +94,8 @@ export function EditToolDialog({ children, tool, allTools = [], onSave }: EditTo
       form.reset(isEditing ? {
         ...tool,
         id: tool.id,
+        billing_type: tool.billing_type || "plan",
+        period_months: tool.period_months ?? (tool.billing_type === "addon" ? 1 : null),
       } : {
         id: "",
         title: "",
@@ -96,7 +106,11 @@ export function EditToolDialog({ children, tool, allTools = [], onSave }: EditTo
         color: "text-primary",
         bg_color: "bg-primary/10",
         popular: false,
+        billing_type: "plan",
+        period_months: null,
       });
+      setPreviewImage(tool?.image_path || null);
+      setLocalImageFile(null);
     }
   }, [open, tool, isEditing, form]);
   
@@ -124,31 +138,109 @@ export function EditToolDialog({ children, tool, allTools = [], onSave }: EditTo
     });
   };
 
+  const handleImportFromFile = () => {
+    if (!fileInputRef.current) return;
+    fileInputRef.current.value = '';
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = reader.result?.toString() || '';
+        const parsed = JSON.parse(text);
+
+        const result = formSchema.safeParse(parsed);
+        if (!result.success) {
+          console.error(result.error);
+          toast({
+            variant: "destructive",
+            title: "ملف غير صالح",
+            description: "تأكد أن الملف يحتوي على حقول الأداة الأساسية (id, title, description, category, price_label, icon, color, bg_color, popular).",
+          });
+          return;
+        }
+
+        const values = result.data;
+
+        form.reset({
+          id: isEditing ? tool.id : values.id,
+          title: values.title,
+          description: values.description,
+          category: values.category,
+          price_label: values.price_label,
+          icon: values.icon,
+          color: values.color,
+          bg_color: values.bg_color,
+          popular: values.popular ?? false,
+        });
+
+        toast({
+          title: "تم استيراد تعريف الأداة بنجاح",
+          description: "تأكّد من الحقول ثم اضغط حفظ لإضافة الأداة إلى المتجر.",
+        });
+      } catch (error: any) {
+        console.error(error);
+        toast({
+          variant: "destructive",
+          title: "فشل قراءة الملف",
+          description: "تأكد أن الملف بصيغة JSON صحيحة.",
+        });
+      }
+    };
+
+    reader.onerror = () => {
+      toast({
+        variant: "destructive",
+        title: "فشل قراءة الملف",
+        description: "حدث خطأ أثناء قراءة ملف التعريف.",
+      });
+    };
+
+    reader.readAsText(file, "utf-8");
+  };
+
 
   async function onSubmit(values: FormValues) {
     startSaving(async () => {
-        const dataToSave = {
-            ...values,
-            type: 'free', // Hardcoded as payment system is removed
-        }
-
         try {
+            let imagePath: string | null | undefined = tool?.image_path || null;
+
+            if (localImageFile) {
+              const fileExt = localImageFile.name.split('.').pop();
+              const safeId = isEditing ? tool!.id : values.id;
+              const fileName = `${safeId}.${fileExt}`;
+              const storageRef = ref(storage, `tools/${safeId}/${fileName}`);
+              await uploadBytes(storageRef, localImageFile);
+              imagePath = storageRef.fullPath;
+            }
+
+            const dataToSave: Partial<Tool> = {
+              ...values,
+              type: 'free',
+              image_path: imagePath ?? null,
+            };
+
             if (isEditing) {
-                const toolRef = doc(db, 'tools', tool.id);
-                const { id, ...updateData } = dataToSave;
-                await updateDoc(toolRef, updateData);
+              const toolRef = doc(db, 'tools', tool!.id);
+              const { id, ...updateData } = dataToSave as any;
+              await updateDoc(toolRef, updateData);
             } else {
-                const toolRef = doc(db, 'tools', values.id);
-                const docSnap = await getDoc(toolRef);
-                if (docSnap.exists()) {
-                    toast({
-                        variant: "destructive",
-                        title: "المعرف مستخدم بالفعل",
-                        description: "هذا المعرف مستخدم من قبل أداة أخرى. الرجاء اختيار معرف فريد."
-                    });
-                    return;
-                }
-                await setDoc(toolRef, dataToSave);
+              const toolRef = doc(db, 'tools', values.id);
+              const docSnap = await getDoc(toolRef);
+              if (docSnap.exists()) {
+                toast({
+                  variant: "destructive",
+                  title: "المعرف مستخدم بالفعل",
+                  description: "هذا المعرف مستخدم من قبل أداة أخرى. الرجاء اختيار معرف فريد."
+                });
+                return;
+              }
+              await setDoc(toolRef, dataToSave as any);
             }
             toast({ title: `تم ${isEditing ? 'تعديل' : 'إضافة'} الأداة بنجاح` });
             onSave?.();
@@ -172,21 +264,95 @@ export function EditToolDialog({ children, tool, allTools = [], onSave }: EditTo
                 </DialogDescription>
               </div>
               {!isEditing && (
-                <Button type="button" variant="outline" size="sm" className="gap-1 shrink-0" onClick={handleGenerateToolIdea} disabled={isGenerating || !selectedCategory}>
+                <div className="flex gap-2 flex-row-reverse">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 shrink-0"
+                    onClick={handleGenerateToolIdea}
+                    disabled={isGenerating || !selectedCategory}
+                  >
                     {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     اقترح فكرة
-                </Button>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1 shrink-0 flex-row-reverse"
+                    onClick={handleImportFromFile}
+                  >
+                    <Code2 className="h-4 w-4" />
+                    استيراد من ملف
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
               )}
           </div>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-            <FormField control={form.control} name="title" render={({ field }) => (
-              <FormItem><FormLabel>عنوان الأداة</FormLabel><FormControl><Input placeholder="مثال: تحليلات متقدمة" {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={form.control} name="id" render={({ field }) => (
-              <FormItem><FormLabel>المعرّف البرمجي</FormLabel><FormControl><Input placeholder="اداة-جديدة" {...field} disabled={isEditing} /></FormControl><FormMessage /><p className="text-xs text-muted-foreground pt-1">المعرّف البرمجي للأداة (حروف وأرقام وشرطات فقط). لا يمكن تغييره بعد الإنشاء.</p></FormItem>
-            )}/>
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-6 items-start">
+              <div className="space-y-4">
+                <FormField control={form.control} name="title" render={({ field }) => (
+                  <FormItem><FormLabel>عنوان الأداة</FormLabel><FormControl><Input placeholder="مثال: تحليلات متقدمة" {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={form.control} name="id" render={({ field }) => (
+                  <FormItem><FormLabel>المعرّف البرمجي</FormLabel><FormControl><Input placeholder="اداة-جديدة" {...field} disabled={isEditing} /></FormControl><FormMessage /><p className="text-xs text-muted-foreground pt-1">المعرّف البرمجي للأداة (حروف وأرقام وشرطات فقط). لا يمكن تغييره بعد الإنشاء.</p></FormItem>
+                )}/>
+              </div>
+              <div className="space-y-2">
+                <FormLabel>صورة الأداة (اختياري)</FormLabel>
+                <div
+                  className="relative w-24 h-24 border-2 border-dashed rounded-xl flex items-center justify-center cursor-pointer hover:bg-muted/50 bg-muted/10 overflow-hidden"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {previewImage ? (
+                    <StorageImage
+                      imagePath={previewImage}
+                      alt={form.getValues('title') || 'صورة الأداة'}
+                      fill
+                      className="object-contain p-2"
+                      sizes="96px"
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground text-center px-2">
+                      اضغط لرفع صورة للأداة
+                    </span>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 1024 * 1024) {
+                      toast({
+                        variant: "destructive",
+                        title: "حجم الصورة كبير",
+                        description: "الرجاء اختيار صورة بحجم أقل من 1 ميجابايت.",
+                      });
+                      return;
+                    }
+                    setLocalImageFile(file);
+                    setPreviewImage(URL.createObjectURL(file));
+                  }}
+                  className="hidden"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  يفضّل استخدام شعار مربع (1:1)، بصيغة PNG أو WEBP، وحجم أقل من 1 ميجابايت.
+                </p>
+              </div>
+            </div>
              <FormField
                 control={form.control}
                 name="category"
@@ -261,6 +427,55 @@ export function EditToolDialog({ children, tool, allTools = [], onSave }: EditTo
                     </FormItem>
                 )}
             />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="billing_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>طريقة صلاحية الأداة</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر طريقة الصلاحية" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="plan">مع اشتراك مرشح الأساسي</SelectItem>
+                        <SelectItem value="addon">اشتراك مستقل (مدة خاصة للأداة)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="period_months"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>مدة الأداة (بالأشهر)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="مثال: 1 أو 3 أو 12"
+                        {...field}
+                        value={field.value ?? ''}
+                        disabled={form.watch('billing_type') !== 'addon'}
+                      />
+                    </FormControl>
+                    <p className="text-[11px] text-muted-foreground">
+                      تُستخدم فقط إذا كانت الأداة باشتراك مستقل (Addon). إذا تركتها فارغة يُفترض شهراً واحداً.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
              <FormField control={form.control} name="description" render={({ field }) => (
                 <FormItem><FormLabel>الوصف</FormLabel><FormControl><Textarea placeholder="وصف قصير وجذاب للأداة..." {...field} /></FormControl><FormMessage /></FormItem>
             )}/>

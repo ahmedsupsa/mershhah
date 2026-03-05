@@ -16,6 +16,7 @@ import { useParams } from 'next/navigation';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
+import { StorageImage } from '@/components/shared/StorageImage';
 
 const getInitials = (name?: string | null) => {
   if (!name) return 'A';
@@ -154,10 +155,20 @@ export default function AdminChatPage() {
   return (
     <div className="flex flex-col h-full bg-background">
       <header className="flex items-center gap-4 border-b p-4 shrink-0">
-         <Avatar className="h-10 w-10 border">
-            <AvatarFallback className="bg-muted text-foreground font-bold">
-              {getInitials(session?.ownerName || ownerProfile?.full_name)}
-            </AvatarFallback>
+         <Avatar className="h-10 w-10 border overflow-hidden">
+            {session?.ownerLogo ? (
+              <StorageImage
+                imagePath={session.ownerLogo}
+                alt={pageTitleName}
+                fill
+                className="object-cover"
+                sizes="40px"
+              />
+            ) : (
+              <AvatarFallback className="bg-muted text-foreground font-bold">
+                {getInitials(pageTitleName)}
+              </AvatarFallback>
+            )}
           </Avatar>
         <div>
             <h2 className="text-lg font-semibold">{pageTitleName}</h2>

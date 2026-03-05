@@ -49,7 +49,7 @@ export default function PricingPage() {
   }, []);
 
   return (
-    <div className="bg-white text-foreground min-h-screen overflow-x-hidden">
+    <div className="bg-white text-foreground min-h-screen overflow-x-hidden" dir="rtl">
       <div className="container mx-auto px-4 sm:px-6 max-w-7xl">
         <header className="py-6 flex justify-between items-center border-b">
           <Logo />
@@ -88,7 +88,10 @@ export default function PricingPage() {
             ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-12 max-w-7xl mx-auto">
                 {plans.map((plan, index) => {
-                  const features = getPlanFeatures(plan.id);
+                  const features =
+                    plan.features && Object.keys(plan.features).length > 0
+                      ? plan.features
+                      : getPlanFeatures(plan.id);
                   const isFree = (plan.price ?? 0) === 0;
                   const ctaHref = isFree ? "/register" : (plan.payment_link || "/register");
                   const ctaLabel = isFree ? "ابدأ مجاناً" : "اختر هذه الباقة";

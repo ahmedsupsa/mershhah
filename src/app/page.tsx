@@ -67,6 +67,16 @@ export default function HomePage() {
           <Logo />
           <div className="flex items-center gap-2 md:gap-4">
               <LanguageSwitcher />
+              {/* زر تسجيل الدخول يظهر على الجوال كزر أيقونة، وعلى الشاشات الأكبر كنص كامل */}
+              <Button
+                asChild
+                variant="ghost"
+                className="sm:hidden rounded-full px-3 py-2"
+              >
+                <Link href="/login">
+                  <span className="text-sm font-bold">دخول</span>
+                </Link>
+              </Button>
               <Button asChild variant="ghost" className="hidden sm:flex font-bold">
                   <Link href="/login">تسجيل الدخول</Link>
               </Button>

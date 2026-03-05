@@ -213,6 +213,22 @@ export type Tool = {
   bg_color: string;
   popular: boolean;
   type: "free" | "paid";
+  /**
+   * مسار صورة الأداة في Firebase Storage (اختياري).
+   * إذا كان موجوداً، يتم استخدامه في المتجر بدلاً من أيقونة Lucide.
+   */
+  image_path?: string | null;
+  /**
+   * نوع مدة الأداة:
+   * - plan: تنتهي مع اشتراك مرشح الأساسي.
+   * - addon: لها مدة خاصة بها (period_months).
+   */
+  billing_type?: "plan" | "addon";
+  /**
+   * المدة الافتراضية (بالأشهر) للأدوات من نوع addon.
+   * إذا لم يتم تحديدها، يتم اعتباره شهراً واحداً عند التفعيل.
+   */
+  period_months?: number | null;
 };
 
 export type Application = {
@@ -281,6 +297,12 @@ export type Plan = {
     is_active: boolean;
     is_featured: boolean;
     payment_link?: string;
+    /**
+     * ميزات الباقة كما يحددها المدير.
+     * المفتاح هو اسم الميزة، والقيمة true/false لتحديد إن كانت مشمولة في الباقة.
+     * إذا لم تكن موجودة، يتم استخدام DEFAULT_PLAN_FEATURES كافتراضي.
+     */
+    features?: Record<string, boolean>;
 };
 
 export type ActivationCode = {

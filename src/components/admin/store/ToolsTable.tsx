@@ -14,10 +14,11 @@ import { db } from '@/lib/firebase';
 import { doc, deleteDoc } from "firebase/firestore";
 import { EditToolDialog } from "./EditToolDialog";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
-
+import { StorageImage } from "@/components/shared/StorageImage";
+import type { Tool } from "@/lib/types";
 
 interface ToolsTableProps {
-  tools: any[];
+  tools: Tool[];
   onActionComplete: () => void;
 }
 
@@ -66,8 +67,12 @@ export function ToolsTable({ tools, onActionComplete }: ToolsTableProps) {
                     <TableRow key={tool.id} className="hover:bg-muted/30 transition-colors">
                     <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-lg ${tool.bg_color} ${tool.color} flex items-center justify-center`}>
-                                {getIcon(tool.icon)}
+                            <div className={`w-8 h-8 rounded-lg ${tool.bg_color} ${tool.color} flex items-center justify-center overflow-hidden`}>
+                                {tool.image_path ? (
+                                  <StorageImage imagePath={tool.image_path} alt={tool.title} fill className="object-contain p-1" sizes="32px" />
+                                ) : (
+                                  getIcon(tool.icon)
+                                )}
                             </div>
                             <span>{tool.title}</span>
                         </div>
@@ -102,8 +107,12 @@ export function ToolsTable({ tools, onActionComplete }: ToolsTableProps) {
             <Card key={tool.id}>
                 <CardHeader>
                     <div className="flex items-center gap-3">
-                         <div className={`w-10 h-10 rounded-lg ${tool.bg_color} ${tool.color} flex items-center justify-center`}>
-                            {getIcon(tool.icon)}
+                         <div className={`w-10 h-10 rounded-lg ${tool.bg_color} ${tool.color} flex items-center justify-center overflow-hidden`}>
+                            {tool.image_path ? (
+                              <StorageImage imagePath={tool.image_path} alt={tool.title} fill className="object-contain p-1" sizes="40px" />
+                            ) : (
+                              getIcon(tool.icon)
+                            )}
                         </div>
                         <CardTitle className="text-base">{tool.title}</CardTitle>
                     </div>
