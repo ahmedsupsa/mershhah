@@ -89,6 +89,15 @@ const restaurantChatFlow = ai.defineFlow(
     outputSchema: RestaurantChatOutputSchema,
   },
   async input => {
+    const fallbackMessage = input.locale === 'en'
+      ? "Sorry, I encountered a small technical issue. Try messaging me again! ☕"
+      : 'عفواً، واجهتني مشكلة فنية بسيطة. جرب تراسلني مرة ثانية يا بطل! ☕';
+
+    if (!process.env.GEMINI_API_KEY?.trim()) {
+      console.error('[restaurantChatFlow] GEMINI_API_KEY is not set. Add it in your production environment (e.g. Vercel → Settings → Environment Variables).');
+      return { smartReply: fallbackMessage, showApplications: false, showBranches: false };
+    }
+
     try {
         const selectedPrompt = input.locale === 'en' ? englishPrompt : arabicPrompt;
         const {output} = await selectedPrompt(input, { model: 'googleai/gemini-3.1-pro-preview' });
@@ -102,10 +111,7 @@ const restaurantChatFlow = ai.defineFlow(
         };
     } catch (error) {
         console.error("Error in restaurantChatFlow:", error);
-        const errorMessage = input.locale === 'en' 
-          ? "Sorry, I encountered a small technical issue. Try messaging me again! ☕"
-          : 'عفواً، واجهتني مشكلة فنية بسيطة. جرب تراسلني مرة ثانية يا بطل! ☕';
-        return { smartReply: errorMessage, showApplications: false, showBranches: false };
+        return { smartReply: fallbackMessage, showApplications: false, showBranches: false };
     }
   }
 );
